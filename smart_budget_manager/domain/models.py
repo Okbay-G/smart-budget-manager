@@ -148,6 +148,30 @@ class Transaction:
         """
         return f"{self.tx_type.value.upper()} {self.amount} - {self.description}"
 
+    def __repr__(self) -> str:
+        """Return detailed transaction representation.
+        
+        Returns:
+            str: Detailed object representation.
+        """
+        return (f"Transaction(id={self.id}, tx_type={self.tx_type}, "
+                f"account_id={self.account_id}, category_id={self.category_id}, "
+                f"amount={self.amount}, description='{self.description}', "
+                f"tx_date={self.tx_date})")
+
+    def __lt__(self, other: Transaction) -> bool:
+        """Compare transactions by date (most recent first).
+        
+        Args:
+            other: Another Transaction object.
+            
+        Returns:
+            bool: True if this transaction date is after other (reversed for recent first).
+        """
+        if not isinstance(other, Transaction):
+            return NotImplemented
+        return self.tx_date > other.tx_date
+
 
 @dataclass(frozen=True)
 class MonthlyBudget:
@@ -175,3 +199,27 @@ class MonthlyBudget:
             str: Summary (category_id, year, month, limit).
         """
         return f"Budget {self.year}-{self.month:02d}: ${self.limit_amount}"
+
+    def __repr__(self) -> str:
+        """Return detailed budget representation.
+        
+        Returns:
+            str: Detailed object representation.
+        """
+        return (f"MonthlyBudget(id={self.id}, category_id={self.category_id}, "
+                f"year={self.year}, month={self.month}, limit_amount={self.limit_amount})")
+
+    def __lt__(self, other: MonthlyBudget) -> bool:
+        """Compare budgets by month/year.
+        
+        Args:
+            other: Another MonthlyBudget object.
+            
+        Returns:
+            bool: True if this budget is earlier in time.
+        """
+        if not isinstance(other, MonthlyBudget):
+            return NotImplemented
+        if self.year != other.year:
+            return self.year < other.year
+        return self.month < other.month

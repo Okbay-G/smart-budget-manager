@@ -1,1 +1,1 @@
-"""Persistence layer - Data access and storage"""
+"""Persistence layer"""
