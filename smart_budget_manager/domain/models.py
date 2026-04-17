@@ -135,7 +135,7 @@ class Transaction:
     id: int
     tx_type: TxType
     account_id: int
-    category_id: Optional[int]  # income may not need a category
+    category_id: Optional[int]
     amount: float
     description: str
     tx_date: date

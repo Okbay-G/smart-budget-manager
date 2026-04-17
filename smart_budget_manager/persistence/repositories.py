@@ -1,21 +1,22 @@
 """SQLite-based repository layer for data persistence.
 
-Provides repository classes for managing data persistence to SQLite.
-Repositories implement the Data Access Object pattern, isolating database
-operations from business logic.
+MVP4: Extended repositories with Transaction support.
+Provides CRUD operations for accounts and transactions.
 
 Classes:
     BaseRepository: Abstract base repository with common helper methods.
     SqliteAccountRepository: Repository for account persistence.
+    SqliteTransactionRepository: Repository for transaction persistence.
 """
 
 from __future__ import annotations
 
 import sqlite3
 from abc import ABC, abstractmethod
+from datetime import datetime
 from typing import Generic, Iterable, List, Optional, TypeVar
 
-from ..domain.models import Account
+from ..domain.models import Account, Transaction, TxType
 
 T = TypeVar("T")
 
@@ -28,11 +29,6 @@ class BaseRepository(ABC, Generic[T]):
     """
 
     def __init__(self, db) -> None:
-        """Initialize repository with database connection.
-        
-        Args:
-            db: Database connection manager.
-        """
         self.db = db
 
     def _next_id(self, existing_ids: Iterable[int]) -> int:
@@ -129,3 +125,82 @@ class SqliteAccountRepository(BaseRepository[Account]):
         cursor = conn.cursor()
         cursor.execute("DELETE FROM accounts WHERE id = ? AND user_id = ?", (account_id, user_id))
         conn.commit()
+
+
+class SqliteTransactionRepository(BaseRepository[Transaction]):
+    """Repository for managing transaction persistence.
+    
+    Provides CRUD operations for income and expense transactions.
+    """
+
+    def list_all(self, user_id: int) -> List[Transaction]:
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, tx_type, account_id, category_id, amount, description, tx_date "
+            "FROM transactions WHERE user_id = ? ORDER BY tx_date DESC",
+            (user_id,)
+        )
+        return [self._row_to_transaction(row) for row in cursor.fetchall()]
+
+    def list_for_month(self, user_id: int, year: int, month: int) -> List[Transaction]:
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, tx_type, account_id, category_id, amount, description, tx_date "
+            "FROM transactions WHERE user_id = ? "
+            "AND CAST(strftime('%Y', tx_date) AS INTEGER) = ? "
+            "AND CAST(strftime('%m', tx_date) AS INTEGER) = ? ORDER BY tx_date DESC",
+            (user_id, year, month),
+        )
+        return [self._row_to_transaction(row) for row in cursor.fetchall()]
+
+    def list_for_ytd(self, user_id: int, year: int, month: int) -> List[Transaction]:
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, tx_type, account_id, category_id, amount, description, tx_date "
+            "FROM transactions WHERE user_id = ? "
+            "AND CAST(strftime('%Y', tx_date) AS INTEGER) = ? "
+            "AND CAST(strftime('%m', tx_date) AS INTEGER) <= ? ORDER BY tx_date",
+            (user_id, year, month),
+        )
+        return [self._row_to_transaction(row) for row in cursor.fetchall()]
+
+    def add(self, user_id: int, tx: Transaction) -> Transaction:
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO transactions (user_id, tx_type, account_id, category_id, amount, description, tx_date) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (user_id, tx.tx_type.value, tx.account_id, tx.category_id, tx.amount, tx.description, tx.tx_date),
+        )
+        conn.commit()
+        return Transaction(
+            id=cursor.lastrowid, tx_type=tx.tx_type, account_id=tx.account_id,
+            category_id=tx.category_id, amount=tx.amount, description=tx.description, tx_date=tx.tx_date,
+        )
+
+    def replace_transaction(self, user_id: int, tx_id: int, new_tx: Transaction) -> None:
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE transactions SET tx_type = ?, account_id = ?, category_id = ?, "
+            "amount = ?, description = ?, tx_date = ? WHERE id = ? AND user_id = ?",
+            (new_tx.tx_type.value, new_tx.account_id, new_tx.category_id, new_tx.amount, new_tx.description, new_tx.tx_date, tx_id, user_id),
+        )
+        conn.commit()
+
+    def delete(self, user_id: int, tx_id: int) -> None:
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM transactions WHERE id = ? AND user_id = ?", (tx_id, user_id))
+        conn.commit()
+
+    @staticmethod
+    def _row_to_transaction(row: tuple) -> Transaction:
+        return Transaction(
+            id=row[0], tx_type=TxType(row[1]), account_id=row[2],
+            category_id=row[3], amount=row[4], description=row[5],
+            tx_date=datetime.strptime(row[6], "%Y-%m-%d").date(),
+        )
