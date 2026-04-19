@@ -1,6 +1,5 @@
 """SQLite-based repository layer for data persistence.
 
-MVP4: Extended repositories with Transaction support.
 Provides CRUD operations for accounts and transactions.
 
 Classes:
