@@ -1,11 +1,12 @@
 """SQLite-based repository layer for data persistence.
 
-Provides CRUD operations for accounts and transactions.
+Provides CRUD operations for accounts, categories, and transactions.
 
 Classes:
     BaseRepository: Abstract base repository with common helper methods.
     SqliteAccountRepository: Repository for account persistence.
     SqliteTransactionRepository: Repository for transaction persistence.
+    SqliteCategoryRepository: Repository for category persistence.
 """
 
 from __future__ import annotations
@@ -15,7 +16,8 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Generic, Iterable, List, Optional, TypeVar
 
-from ..domain.models import Account, Transaction, TxType
+from ..domain.models import Account, Transaction, TxType, Category
+from .db import Db
 
 T = TypeVar("T")
 
@@ -203,3 +205,63 @@ class SqliteTransactionRepository(BaseRepository[Transaction]):
             category_id=row[3], amount=row[4], description=row[5],
             tx_date=datetime.strptime(row[6], "%Y-%m-%d").date(),
         )
+
+
+class SqliteCategoryRepository(BaseRepository[Category]):
+    """SQLite repository for Category entities."""
+
+    def __init__(self, db: Db) -> None:
+        self._db = db
+
+    def add(self, user_id: int, name: str) -> Category:
+        """Add a category for a user."""
+        conn = self._db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO categories (user_id, name) VALUES (?, ?)",
+            (user_id, name.strip())
+        )
+        conn.commit()
+        cat_id = cursor.lastrowid
+        return Category(id=cat_id, name=name.strip())
+
+    def list_all(self, user_id: int) -> List[Category]:
+        """List all categories for a user."""
+        conn = self._db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, name FROM categories WHERE user_id = ? ORDER BY name",
+            (user_id,)
+        )
+        return [Category(id=row[0], name=row[1]) for row in cursor.fetchall()]
+
+    def get_by_id(self, user_id: int, category_id: int) -> Optional[Category]:
+        """Get a specific category."""
+        conn = self._db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, name FROM categories WHERE id = ? AND user_id = ?",
+            (category_id, user_id)
+        )
+        row = cursor.fetchone()
+        return Category(id=row[0], name=row[1]) if row else None
+
+    def rename(self, user_id: int, category_id: int, new_name: str) -> None:
+        """Rename a category."""
+        conn = self._db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE categories SET name = ? WHERE id = ? AND user_id = ?",
+            (new_name.strip(), category_id, user_id)
+        )
+        conn.commit()
+
+    def delete(self, user_id: int, category_id: int) -> None:
+        """Delete a category."""
+        conn = self._db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM categories WHERE id = ? AND user_id = ?",
+            (category_id, user_id)
+        )
+        conn.commit()
