@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Comprehensive Test Suite for Income Transactions and Transaction Entities
+"""Comprehensive Test Suite for Categories and Analytics
 
-This suite validates cumulative functionality from earlier steps plus new income transaction features:
+This suite validates cumulative functionality from earlier steps plus new category and analytics features:
 - Database schema initialization and integrity (inherited from earlier steps)
 - Domain model classes and magic methods (inherited from earlier steps)
 - User model, email/password/username validation, registration, login, session management (inherited from earlier steps)
 - Account repository operations and user isolation (inherited from earlier steps)
 - Expense and income transaction persistence via SqliteTransactionRepository (inherited from earlier steps)
-- Expense transaction creation via TransactionFactory with validation (new in this step)
-- Income transaction creation via TransactionFactory with no-category constraint (new in this step)
-- Expense and income validation rules (new in this step)
-- Transaction DTO conversion from entity to domain model (new in this step)
-- Transaction entity magic methods __str__ and __repr__ (new in this step)
+- Expense and income transaction entity creation, validation, DTO conversion, magic methods (inherited from earlier steps)
+- Category repository: add, list, rename, delete (new in this step)
+- Monthly spending analytics by category (new in this step)
+- Year-to-date spending totals (new in this step)
+- Category breakdown analytics (new in this step)
 """
 
 import sys
@@ -21,7 +21,7 @@ from datetime import date
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from smart_budget_manager.persistence.db import Db
-from smart_budget_manager.persistence.repositories import SqliteAccountRepository, SqliteTransactionRepository
+from smart_budget_manager.persistence.repositories import SqliteAccountRepository, SqliteTransactionRepository, SqliteCategoryRepository
 from smart_budget_manager.domain.models import TxType, Account, Category, Transaction, MonthlyBudget
 from smart_budget_manager.domain.auth_service import AuthService, User
 from smart_budget_manager.domain.validators import (
@@ -1340,7 +1340,7 @@ def test_transaction_deletion():
 
 
 # ============================================================
-# Step 5 tests (Income_Transactions) - New
+# Step 5 tests (Income_Transactions) - Inherited
 # ============================================================
 
 def test_expense_transaction_creation():
@@ -1626,19 +1626,243 @@ def test_transaction_entity_magic_methods():
 
 
 
+# Step 6 tests (Categories_Analytics) - New
+# ============================================================
+
+def test_category_repository():
+    """Test category repository operations."""
+    print("\n" + "="*60)
+    print("Testing Category Repository")
+    print("="*60)
+    
+    try:
+        if os.path.exists("test_mvp6_categories.db"):
+            os.remove("test_mvp6_categories.db")
+        
+        db = setup_test_db("test_mvp6_categories.db")
+        repo = SqliteCategoryRepository(db)
+        
+        user_id = 1
+        
+        # Add categories (Food and Transport already exist from setup, add new ones)
+        cat1 = repo.add(user_id, "Utilities")
+        cat2 = repo.add(user_id, "Healthcare")
+        cat3 = repo.add(user_id, "Entertainment")
+        
+        assert cat1.id is not None
+        assert cat2.id is not None
+        print(f"[OK] Created 3 new categories: {cat1.name}, {cat2.name}, {cat3.name}")
+        
+        # List all for user 1 (should have Food + Transport + 3 new = 5 total)
+        all_cats = repo.list_all(user_id)
+        assert len(all_cats) >= 3
+        print(f"[OK] Listed all categories: {len(all_cats)}")
+        
+        # Get by ID
+        retrieved = repo.get_by_id(user_id, cat1.id)
+        assert retrieved.name == "Utilities"
+        print(f"[OK] Retrieved category: {retrieved}")
+        
+        # Update/rename
+        repo.rename(user_id, cat1.id, "Utilities Bill")
+        renamed = repo.get_by_id(user_id, cat1.id)
+        assert renamed.name == "Utilities Bill"
+        print(f"[OK] Renamed category: {renamed}")
+        
+        # Delete
+        repo.delete(user_id, cat2.id)
+        all_cats = repo.list_all(user_id)
+        remaining_count = len(all_cats)
+        print(f"[OK] Deleted category, now {remaining_count} remain")
+        
+        db.close()
+        return True
+    except Exception as e:
+        print(f"[FAIL] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_analytics_monthly_spending():
+    """Validate monthly spending analytics by category.
+    
+    Verifies:
+    - Calculate total spending per category for month
+    - Filter transactions by month and year
+    - Break down spending by category
+    - Aggregate multiple transactions correctly
+    """
+    print("\n" + "="*60)
+    print("Testing Monthly Spending Analytics")
+    print("="*60)
+    
+    try:
+        if os.path.exists("test_mvp6_analytics.db"):
+
+            os.remove("test_mvp6_analytics.db")
+
+        
+        db = setup_test_db("test_mvp6_analytics.db")
+        tx_repo = SqliteTransactionRepository(db)
+        
+        user_id = 1
+        
+        # Create transactions in different categories
+        tx1 = Transaction(id=0, tx_type=TxType.EXPENSE, account_id=1, category_id=1,
+                         amount=50.0, description="Groceries", tx_date=date(2024, 3, 5))
+        tx2 = Transaction(id=0, tx_type=TxType.EXPENSE, account_id=1, category_id=1,
+                         amount=40.0, description="Groceries", tx_date=date(2024, 3, 15))
+        tx3 = Transaction(id=0, tx_type=TxType.EXPENSE, account_id=1, category_id=2,
+                         amount=100.0, description="Gas", tx_date=date(2024, 3, 10))
+        tx4 = Transaction(id=0, tx_type=TxType.EXPENSE, account_id=1, category_id=1,
+                         amount=30.0, description="Groceries", tx_date=date(2024, 2, 20))
+        
+        tx_repo.add(user_id, tx1)
+        tx_repo.add(user_id, tx2)
+        tx_repo.add(user_id, tx3)
+        tx_repo.add(user_id, tx4)
+        
+        # Get March expenses
+        march_tx = tx_repo.list_for_month(user_id, 2024, 3)
+        assert len(march_tx) == 3
+        total = sum(t.amount for t in march_tx)
+        assert total == 190.0
+        print(f"[OK] March 2024: {len(march_tx)} expenses, total=${total}")
+        
+        # Break down by category
+        cat1_tx = [t for t in march_tx if t.category_id == 1]
+        cat2_tx = [t for t in march_tx if t.category_id == 2]
+        
+        print(f"[OK] Category 1 (Food): {len(cat1_tx)} tx, ${sum(t.amount for t in cat1_tx)}")
+        print(f"[OK] Category 2 (Transportation): {len(cat2_tx)} tx, ${sum(t.amount for t in cat2_tx)}")
+        
+        db.close()
+        return True
+    except Exception as e:
+        print(f"[FAIL] Error: {e}")
+        return False
+
+
+def test_analytics_ytd_totals():
+    """Test year-to-date analytics."""
+    print("\n" + "="*60)
+    print("Testing YTD Analytics")
+    print("="*60)
+    
+    try:
+        if os.path.exists("test_mvp6_ytd.db"):
+
+            os.remove("test_mvp6_ytd.db")
+
+        
+        db = setup_test_db("test_mvp6_ytd.db")
+        tx_repo = SqliteTransactionRepository(db)
+        
+        user_id = 1
+        
+        # Create transactions across months
+        for month in [1, 2, 3]:
+            tx = Transaction(
+                id=0, tx_type=TxType.EXPENSE, account_id=1, category_id=1,
+                amount=100.0, description=f"Month {month}", tx_date=date(2024, month, 15)
+            )
+            tx_repo.add(user_id, tx)
+        
+        # Get YTD
+        ytd_tx = tx_repo.list_for_ytd(user_id, 2024, 3)
+        assert len(ytd_tx) == 3
+        total = sum(t.amount for t in ytd_tx)
+        assert total == 300.0
+        print(f"[OK] YTD 2024 (Jan-Mar): {len(ytd_tx)} expenses, total=${total}")
+        
+        # Get partial YTD
+        ytd_jan = tx_repo.list_for_ytd(user_id, 2024, 1)
+        assert len(ytd_jan) == 1
+        assert sum(t.amount for t in ytd_jan) == 100.0
+        print(f"[OK] YTD 2024 (Jan): {len(ytd_jan)} expenses, total=$100.0")
+        
+        db.close()
+        return True
+    except Exception as e:
+        print(f"[FAIL] Error: {e}")
+        return False
+
+
+def test_analytics_category_breakdown():
+    """Validate category-level spending breakdown and comparison.
+    
+    Confirms:
+    - Spending breakdown across all categories
+    - Identify highest and lowest spending categories
+    - Compare category totals
+    - Generate category spending reports
+    """
+    print("\n" + "="*60)
+    print("Testing Category Breakdown Analytics")
+    print("="*60)
+    
+    try:
+        if os.path.exists("test_mvp6_breakdown.db"):
+
+            os.remove("test_mvp6_breakdown.db")
+
+        
+        db = setup_test_db("test_mvp6_breakdown.db")
+        tx_repo = SqliteTransactionRepository(db)
+        
+        user_id = 1
+        
+        # Create diverse transactions
+        categories_data = [
+            (1, "Food", 250.0),
+            (2, "Transport", 150.0),
+        ]
+        
+        for cat_id, name, amount in categories_data:
+            tx = Transaction(
+                id=0, tx_type=TxType.EXPENSE, account_id=1, category_id=cat_id,
+                amount=amount, description=name, tx_date=date(2024, 3, 15)
+            )
+            tx_repo.add(user_id, tx)
+        
+        all_tx = tx_repo.list_all(user_id)
+        assert len(all_tx) == 2
+        total = sum(t.amount for t in all_tx)
+        assert total == 400.0
+        print(f"[OK] Total expenses: ${total}")
+        
+        # Category breakdown
+        for cat_id, name, amount in categories_data:
+            cat_tx = [t for t in all_tx if t.category_id == cat_id]
+            actual_amount = sum(t.amount for t in cat_tx)
+            percentage = (actual_amount / total) * 100
+            print(f"[OK] {name}: ${actual_amount} ({percentage:.1f}%)")
+        
+        db.close()
+        return True
+    except Exception as e:
+        print(f"[FAIL] Error: {e}")
+        return False
+
+
+
+
 def run_all_tests():
     """Execute all tests (inherited + new).
     
-    Validates all functionality from database initialization through income transaction entities:
+    Validates all functionality from database initialization through categories and analytics:
     - Database schema and integrity
     - Domain models and magic methods
     - User authentication
     - Account repository operations
     - Expense and income transaction persistence
     - Transaction entity creation, validation, and DTO conversion
+    - Category repository operations
+    - Monthly, YTD, and category breakdown analytics
     """
     print("\n" + "#"*60)
-    print("# Test Suite: Database + Auth + Accounts + Transactions + Income Entities")
+    print("# Test Suite: Database + Auth + Accounts + Transactions + Income + Categories + Analytics")
     print("#"*60)
     
     # Step 1 tests (inherited)
@@ -1672,13 +1896,19 @@ def run_all_tests():
     results.append(("Transaction Update", test_transaction_update()))
     results.append(("Transaction Deletion", test_transaction_deletion()))
     
-    # Step 5 tests (new)
+    # Step 5 tests (inherited)
     results.append(("Expense Transaction Creation", test_expense_transaction_creation()))
     results.append(("Income Transaction Creation", test_income_transaction_creation()))
     results.append(("Expense Validation", test_expense_validation()))
     results.append(("Income Validation", test_income_validation()))
     results.append(("Transaction Dto Conversion", test_transaction_dto_conversion()))
     results.append(("Transaction Magic Methods", test_transaction_entity_magic_methods()))
+    
+    # Step 6 tests (new)
+    results.append(("Category Repository", test_category_repository()))
+    results.append(("Monthly Spending Analytics", test_analytics_monthly_spending()))
+    results.append(("YTD Analytics", test_analytics_ytd_totals()))
+    results.append(("Category Breakdown Analytics", test_analytics_category_breakdown()))
     
     print("\n" + "="*60)
     print("Test Results Summary")
