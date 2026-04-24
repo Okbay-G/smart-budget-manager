@@ -1,6 +1,6 @@
 """SQLite-based repository layer for data persistence.
 
-Provides CRUD operations for accounts, categories, and transactions.
+Provides CRUD operations for accounts, categories, transactions, and budgets.
 
 Classes:
     BaseRepository: Abstract base repository with common helper methods.
@@ -16,7 +16,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Generic, Iterable, List, Optional, TypeVar
 
-from ..domain.models import Account, Transaction, TxType, Category
+from ..domain.models import Account, Transaction, TxType, Category, MonthlyBudget
 from .db import Db
 
 T = TypeVar("T")
@@ -263,5 +263,69 @@ class SqliteCategoryRepository(BaseRepository[Category]):
         cursor.execute(
             "DELETE FROM categories WHERE id = ? AND user_id = ?",
             (category_id, user_id)
+        )
+        conn.commit()
+
+
+class SqliteBudgetRepository(BaseRepository[MonthlyBudget]):
+    """SQLite repository for MonthlyBudget entities."""
+
+    def __init__(self, db: Db) -> None:
+        self._db = db
+
+    def add(self, user_id: int, category_id: int, year: int, month: int, limit_amount: float) -> MonthlyBudget:
+        """Add a budget."""
+        conn = self._db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO monthly_budgets (user_id, category_id, year, month, limit_amount) VALUES (?, ?, ?, ?, ?)",
+            (user_id, category_id, year, month, limit_amount)
+        )
+        conn.commit()
+        budget_id = cursor.lastrowid
+        return MonthlyBudget(id=budget_id, category_id=category_id, 
+                            year=year, month=month, limit_amount=limit_amount)
+
+    def list_all(self, user_id: int) -> List[MonthlyBudget]:
+        """List all budgets for a user."""
+        conn = self._db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, user_id, category_id, year, month, limit_amount FROM monthly_budgets WHERE user_id = ?",
+            (user_id,)
+        )
+        return [MonthlyBudget(id=row[0], category_id=row[2], 
+                            year=row[3], month=row[4], limit_amount=row[5]) 
+                for row in cursor.fetchall()]
+
+    def get_by_id(self, user_id: int, budget_id: int) -> Optional[MonthlyBudget]:
+        """Get a specific budget."""
+        conn = self._db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, user_id, category_id, year, month, limit_amount FROM monthly_budgets WHERE id = ? AND user_id = ?",
+            (budget_id, user_id)
+        )
+        row = cursor.fetchone()
+        return MonthlyBudget(id=row[0], category_id=row[2], 
+                            year=row[3], month=row[4], limit_amount=row[5]) if row else None
+
+    def update(self, user_id: int, budget_id: int, limit_amount: float) -> None:
+        """Update a budget's limit amount."""
+        conn = self._db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE monthly_budgets SET limit_amount = ? WHERE id = ? AND user_id = ?",
+            (limit_amount, budget_id, user_id)
+        )
+        conn.commit()
+
+    def delete(self, user_id: int, budget_id: int) -> None:
+        """Delete a budget."""
+        conn = self._db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM monthly_budgets WHERE id = ? AND user_id = ?",
+            (budget_id, user_id)
         )
         conn.commit()
