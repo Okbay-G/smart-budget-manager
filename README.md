@@ -322,6 +322,6 @@ python test.py
 
 ## 📝 License
 
-This project is provided for **educational use only** as part of the Advanced Programming module.
+This project is for **educational use only** as part of the Advanced Programming module.
 
 
