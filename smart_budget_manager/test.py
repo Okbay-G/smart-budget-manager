@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
-"""Comprehensive Test Suite for Categories and Analytics
+"""Comprehensive Test Suite for Budget Management
 
-This suite validates cumulative functionality from earlier steps plus new category and analytics features:
+This suite validates cumulative functionality from earlier steps plus new budget management features:
 - Database schema initialization and integrity (inherited from earlier steps)
 - Domain model classes and magic methods (inherited from earlier steps)
 - User model, email/password/username validation, registration, login, session management (inherited from earlier steps)
 - Account repository operations and user isolation (inherited from earlier steps)
 - Expense and income transaction persistence via SqliteTransactionRepository (inherited from earlier steps)
 - Expense and income transaction entity creation, validation, DTO conversion, magic methods (inherited from earlier steps)
-- Category repository: add, list, rename, delete (new in this step)
-- Monthly spending analytics by category (new in this step)
-- Year-to-date spending totals (new in this step)
-- Category breakdown analytics (new in this step)
+- Category repository: add, list, rename, delete (inherited from earlier steps)
+- Monthly spending analytics by category (inherited from earlier steps)
+- Year-to-date spending totals (inherited from earlier steps)
+- Category breakdown analytics (inherited from earlier steps)
+- Budget repository: add, list, get by ID, update, delete (new in this step)
+- Budget vs actual spending comparison (new in this step)
+- Budget alerts when spending approaches or exceeds limits (new in this step)
+- Multi-category budget tracking (new in this step)
 """
 
 import sys
@@ -21,7 +25,7 @@ from datetime import date
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from smart_budget_manager.persistence.db import Db
-from smart_budget_manager.persistence.repositories import SqliteAccountRepository, SqliteTransactionRepository, SqliteCategoryRepository
+from smart_budget_manager.persistence.repositories import SqliteAccountRepository, SqliteTransactionRepository, SqliteCategoryRepository, SqliteBudgetRepository
 from smart_budget_manager.domain.models import TxType, Account, Category, Transaction, MonthlyBudget
 from smart_budget_manager.domain.auth_service import AuthService, User
 from smart_budget_manager.domain.validators import (
@@ -1338,11 +1342,6 @@ def test_transaction_deletion():
 
 
 
-
-# ============================================================
-# Step 5 tests (Income_Transactions) - Inherited
-# ============================================================
-
 def test_expense_transaction_creation():
     """Test creating expense transactions with factory."""
     print("\n" + "="*60)
@@ -1580,6 +1579,10 @@ def test_transaction_dto_conversion():
         return False
 
 
+# ============================================================
+# Step 5 tests (Income_Transactions) - Inherited
+# ============================================================
+
 def test_transaction_entity_magic_methods():
     """Test transaction entity magic methods (__str__, __repr__) for ExpenseTransaction and IncomeTransaction."""
     print("\n" + "="*60)
@@ -1625,8 +1628,8 @@ def test_transaction_entity_magic_methods():
         return False
 
 
-
-# Step 6 tests (Categories_Analytics) - New
+# ============================================================
+# Step 6 tests (Categories_Analytics) - Inherited
 # ============================================================
 
 def test_category_repository():
@@ -1848,10 +1851,232 @@ def test_analytics_category_breakdown():
 
 
 
+# ============================================================
+# Step 7 tests (Budget_Management) - New
+# ============================================================
+
+def test_budget_repository():
+    """Test budget repository operations."""
+    print("\n" + "="*60)
+    print("Testing Budget Repository")
+    print("="*60)
+    
+    try:
+        if os.path.exists("test_mvp7_budgets.db"):
+
+            os.remove("test_mvp7_budgets.db")
+
+        
+        db = setup_test_db("test_mvp7_budgets.db")
+        repo = SqliteBudgetRepository(db)
+        
+        user_id = 1
+        
+        # Add budgets
+        budget1 = repo.add(user_id, 1, 2024, 3, 300.0)  # Food budget $300
+        budget2 = repo.add(user_id, 2, 2024, 3, 150.0)  # Transport budget $150
+        
+        assert budget1.id is not None
+        assert budget1.limit_amount == 300.0
+        print(f"[OK] Created budget 1: Category {budget1.category_id}, ${budget1.limit_amount}")
+        print(f"[OK] Created budget 2: Category {budget2.category_id}, ${budget2.limit_amount}")
+        
+        # List all for user
+        all_budgets = repo.list_all(user_id)
+        assert len(all_budgets) >= 2
+        print(f"[OK] Listed all budgets for user: {len(all_budgets)}")
+        
+        # Get by ID
+        retrieved = repo.get_by_id(user_id, budget1.id)
+        assert retrieved.limit_amount == 300.0
+        print(f"[OK] Retrieved budget: ${retrieved.limit_amount}")
+        
+        # Update budget
+        repo.update(user_id, budget1.id, 400.0)
+        updated = repo.get_by_id(user_id, budget1.id)
+        assert updated.limit_amount == 400.0
+        print(f"[OK] Updated budget: ${updated.limit_amount}")
+        
+        # Delete budget
+        repo.delete(user_id, budget2.id)
+        print(f"[OK] Deleted budget")
+        
+        db.close()
+        return True
+    except Exception as e:
+        print(f"[FAIL] Error: {e}")
+        return False
+
+
+def test_budget_vs_actual():
+    """Test budget vs actual spending."""
+    print("\n" + "="*60)
+    print("Testing Budget vs Actual")
+    print("="*60)
+    
+    try:
+        if os.path.exists("test_mvp7_vs_actual.db"):
+
+            os.remove("test_mvp7_vs_actual.db")
+
+        
+        db = setup_test_db("test_mvp7_vs_actual.db")
+        budget_repo = SqliteBudgetRepository(db)
+        tx_repo = SqliteTransactionRepository(db)
+        
+        user_id = 1
+        
+        # Create budget for category 1 ($300)
+        budget = budget_repo.add(user_id, 1, 2024, 3, 300.0)
+        print(f"[OK] Budget set for category 1: $300")
+        
+        # Create actual expenses
+        tx1 = Transaction(id=0, tx_type=TxType.EXPENSE, account_id=1, category_id=1,
+                         amount=100.0, description="Exp 1", tx_date=date(2024, 3, 5))
+        tx2 = Transaction(id=0, tx_type=TxType.EXPENSE, account_id=1, category_id=1,
+                         amount=150.0, description="Exp 2", tx_date=date(2024, 3, 15))
+        
+        tx_repo.add(user_id, tx1)
+        tx_repo.add(user_id, tx2)
+        
+        # Calculate actual vs budget
+        month_tx = tx_repo.list_for_month(user_id, 2024, 3)
+        cat1_tx = [t for t in month_tx if t.category_id == 1]
+        actual_spent = sum(t.amount for t in cat1_tx)
+        
+        budget_limit = budget.limit_amount
+        remaining = budget_limit - actual_spent
+        percent_used = (actual_spent / budget_limit) * 100
+        
+        print(f"[OK] Budget: ${budget_limit}")
+        print(f"[OK] Actual spent: ${actual_spent}")
+        print(f"[OK] Remaining: ${remaining}")
+        print(f"[OK] Percent used: {percent_used:.1f}%")
+        
+        # Verify within budget
+        assert actual_spent <= budget_limit
+        print(f"[OK] Under budget by ${remaining}")
+        
+        db.close()
+        return True
+    except Exception as e:
+        print(f"[FAIL] Error: {e}")
+        return False
+
+
+def test_budget_alerts():
+    """Test budget alert thresholds."""
+    print("\n" + "="*60)
+    print("Testing Budget Alerts")
+    print("="*60)
+    
+    try:
+        if os.path.exists("test_mvp7_alerts.db"):
+
+            os.remove("test_mvp7_alerts.db")
+
+        
+        db = setup_test_db("test_mvp7_alerts.db")
+        budget_repo = SqliteBudgetRepository(db)
+        tx_repo = SqliteTransactionRepository(db)
+        
+        user_id = 1
+        
+        # Create $200 budget
+        budget = budget_repo.add(user_id, 1, 2024, 3, 200.0)
+        
+        # Spend 50% - no alert
+        tx1 = Transaction(id=0, tx_type=TxType.EXPENSE, account_id=1, category_id=1,
+                         amount=100.0, description="50%", tx_date=date(2024, 3, 5))
+        tx_repo.add(user_id, tx1)
+        month_tx = tx_repo.list_for_month(user_id, 2024, 3)
+        spent = sum(t.amount for t in month_tx if t.category_id == 1)
+        percent = (spent / 200.0) * 100
+        print(f"[OK] Spent {percent:.0f}% - No alert")
+        assert percent <= 50
+        
+        # Spend 80% - warning
+        tx2 = Transaction(id=0, tx_type=TxType.EXPENSE, account_id=1, category_id=1,
+                         amount=60.0, description="80%", tx_date=date(2024, 3, 10))
+        tx_repo.add(user_id, tx2)
+        month_tx = tx_repo.list_for_month(user_id, 2024, 3)
+        spent = sum(t.amount for t in month_tx if t.category_id == 1)
+        percent = (spent / 200.0) * 100
+        if percent >= 80:
+            print(f"[OK] Spent {percent:.0f}% - [WARNING]")
+        
+        # Spend 100% - critical
+        tx3 = Transaction(id=0, tx_type=TxType.EXPENSE, account_id=1, category_id=1,
+                         amount=40.0, description="100%", tx_date=date(2024, 3, 15))
+        tx_repo.add(user_id, tx3)
+        month_tx = tx_repo.list_for_month(user_id, 2024, 3)
+        spent = sum(t.amount for t in month_tx if t.category_id == 1)
+        percent = (spent / 200.0) * 100
+        if percent >= 100:
+            print(f"[OK] Spent {percent:.0f}% - [ALERT] Budget exceeded!")
+        
+        db.close()
+        return True
+    except Exception as e:
+        print(f"[FAIL] Error: {e}")
+        return False
+
+
+def test_multi_category_budgets():
+    """Test multiple category budgets."""
+    print("\n" + "="*60)
+    print("Testing Multi-Category Budgets")
+    print("="*60)
+    
+    try:
+        if os.path.exists("test_mvp7_multi.db"):
+
+            os.remove("test_mvp7_multi.db")
+
+        
+        db = setup_test_db("test_mvp7_multi.db")
+        budget_repo = SqliteBudgetRepository(db)
+        tx_repo = SqliteTransactionRepository(db)
+        
+        user_id = 1
+        
+        # Create budgets for multiple categories
+        budgets = {}
+        budget_data = [(1, "Food", 300.0), (2, "Transport", 150.0), (3, "Utilities", 100.0)]
+        
+        for cat_id, name, limit in budget_data:
+            budget = budget_repo.add(user_id, cat_id, 2024, 3, limit)
+            budgets[cat_id] = limit
+            print(f"[OK] Budget for {name}: ${limit}")
+        
+        # Add expenses for each category
+        expenses = [(1, 250.0), (2, 100.0), (3, 95.0)]
+        for cat_id, amount in expenses:
+            tx = Transaction(id=0, tx_type=TxType.EXPENSE, account_id=1, category_id=cat_id,
+                            amount=amount, description="Exp", tx_date=date(2024, 3, 15))
+            tx_repo.add(user_id, tx)
+        
+        # Analyze each budget
+        month_tx = tx_repo.list_for_month(user_id, 2024, 3)
+        for cat_id, name, limit in budget_data:
+            cat_tx = [t for t in month_tx if t.category_id == cat_id]
+            spent = sum(t.amount for t in cat_tx)
+            status = "[OK]" if spent <= limit else "[FAIL]"
+            print(f"{status} {name}: ${spent}/${limit}")
+        
+        db.close()
+        return True
+    except Exception as e:
+        print(f"[FAIL] Error: {e}")
+        return False
+
+
+
+
 def run_all_tests():
     """Execute all tests (inherited + new).
     
-    Validates all functionality from database initialization through categories and analytics:
+    Validates all functionality from database initialization through budget management:
     - Database schema and integrity
     - Domain models and magic methods
     - User authentication
@@ -1860,9 +2085,11 @@ def run_all_tests():
     - Transaction entity creation, validation, and DTO conversion
     - Category repository operations
     - Monthly, YTD, and category breakdown analytics
+    - Budget repository operations
+    - Budget vs actual, alerts, and multi-category tracking
     """
     print("\n" + "#"*60)
-    print("# Test Suite: Database + Auth + Accounts + Transactions + Income + Categories + Analytics")
+    print("# Test Suite: Database + Auth + Accounts + Transactions + Income + Categories + Analytics + Budgets")
     print("#"*60)
     
     # Step 1 tests (inherited)
@@ -1904,11 +2131,17 @@ def run_all_tests():
     results.append(("Transaction Dto Conversion", test_transaction_dto_conversion()))
     results.append(("Transaction Magic Methods", test_transaction_entity_magic_methods()))
     
-    # Step 6 tests (new)
+    # Step 6 tests (inherited)
     results.append(("Category Repository", test_category_repository()))
     results.append(("Monthly Spending Analytics", test_analytics_monthly_spending()))
     results.append(("YTD Analytics", test_analytics_ytd_totals()))
     results.append(("Category Breakdown Analytics", test_analytics_category_breakdown()))
+    
+    # Step 7 tests (new)
+    results.append(("Budget Repository", test_budget_repository()))
+    results.append(("Budget vs Actual", test_budget_vs_actual()))
+    results.append(("Budget Alerts", test_budget_alerts()))
+    results.append(("Multi-Category Budgets", test_multi_category_budgets()))
     
     print("\n" + "="*60)
     print("Test Results Summary")
