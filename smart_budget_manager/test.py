@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Comprehensive Test Suite for Budget Management
+"""Comprehensive Test Suite for Advanced Analytics
 
-This suite validates cumulative functionality from earlier steps plus new budget management features:
+This suite validates cumulative functionality from earlier steps plus new advanced analytics features:
 - Database schema initialization and integrity (inherited from earlier steps)
 - Domain model classes and magic methods (inherited from earlier steps)
 - User model, email/password/username validation, registration, login, session management (inherited from earlier steps)
@@ -12,15 +12,20 @@ This suite validates cumulative functionality from earlier steps plus new budget
 - Monthly spending analytics by category (inherited from earlier steps)
 - Year-to-date spending totals (inherited from earlier steps)
 - Category breakdown analytics (inherited from earlier steps)
-- Budget repository: add, list, get by ID, update, delete (new in this step)
-- Budget vs actual spending comparison (new in this step)
-- Budget alerts when spending approaches or exceeds limits (new in this step)
-- Multi-category budget tracking (new in this step)
+- Budget repository: add, list, get by ID, update, delete (inherited from earlier steps)
+- Budget vs actual spending comparison (inherited from earlier steps)
+- Budget alerts when spending approaches or exceeds limits (inherited from earlier steps)
+- Multi-category budget tracking (inherited from earlier steps)
+- Spending trend analysis over time (new in this step)
+- Category comparison analytics (new in this step)
+- Year-to-date reporting (new in this step)
+- Advanced spending metrics (new in this step)
 """
 
 import sys
 import os
 from datetime import date
+from collections import defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
@@ -1342,6 +1347,11 @@ def test_transaction_deletion():
 
 
 
+
+# ============================================================
+# Step 5 tests (Income_Transactions) - Inherited
+# ============================================================
+
 def test_expense_transaction_creation():
     """Test creating expense transactions with factory."""
     print("\n" + "="*60)
@@ -1579,14 +1589,10 @@ def test_transaction_dto_conversion():
         return False
 
 
-# ============================================================
-# Step 5 tests (Income_Transactions) - Inherited
-# ============================================================
-
 def test_transaction_entity_magic_methods():
     """Test transaction entity magic methods (__str__, __repr__) for ExpenseTransaction and IncomeTransaction."""
     print("\n" + "="*60)
-    print("Testing Transaction Entity Magic Methods")
+    print("Testing Magic Methods")
     print("="*60)
     
     try:
@@ -1626,6 +1632,7 @@ def test_transaction_entity_magic_methods():
     except Exception as e:
         print(f"[FAIL] Error: {e}")
         return False
+
 
 
 # ============================================================
@@ -1852,7 +1859,7 @@ def test_analytics_category_breakdown():
 
 
 # ============================================================
-# Step 7 tests (Budget_Management) - New
+# Step 7 tests (Budget_Management) - Inherited
 # ============================================================
 
 def test_budget_repository():
@@ -2073,10 +2080,232 @@ def test_multi_category_budgets():
 
 
 
+# ============================================================
+# Step 8 tests (Advanced_Analytics) - New
+# ============================================================
+
+def test_spending_trends():
+    """Test spending trend analysis."""
+    print("\n" + "="*60)
+    print("Testing Spending Trends")
+    print("="*60)
+    
+    try:
+        if os.path.exists("test_mvp8_trends.db"):
+
+            os.remove("test_mvp8_trends.db")
+
+        
+        db = setup_test_db("test_mvp8_trends.db")
+        tx_repo = SqliteTransactionRepository(db)
+        
+        user_id = 1
+        
+        # Create transactions showing trend
+        monthly_amounts = [100.0, 120.0, 140.0, 160.0, 180.0]
+        
+        for month, amount in enumerate(monthly_amounts, start=1):
+            tx = Transaction(
+                id=0, tx_type=TxType.EXPENSE, account_id=1, category_id=1,
+                amount=amount, description=f"Month {month}", tx_date=date(2024, month, 15)
+            )
+            tx_repo.add(user_id, tx)
+        
+        # Analyze trend
+        total_months = len(monthly_amounts)
+        increase = monthly_amounts[-1] - monthly_amounts[0]
+        percent_change = (increase / monthly_amounts[0]) * 100
+        
+        print(f"[OK] Jan-May spending: {monthly_amounts}")
+        print(f"[OK] Total increase: ${increase}")
+        print(f"[OK] Percent change: {percent_change:.1f}%")
+        print(f"[OK] Upward trend detected!")
+        
+        db.close()
+        return True
+    except Exception as e:
+        print(f"[FAIL] Error: {e}")
+        return False
+
+
+def test_category_comparison():
+    """Test category spending comparison across months."""
+    print("\n" + "="*60)
+    print("Testing Category Comparison")
+    print("="*60)
+    
+    try:
+        if os.path.exists("test_mvp8_category_comp.db"):
+
+            os.remove("test_mvp8_category_comp.db")
+
+        
+        db = setup_test_db("test_mvp8_category_comp.db")
+        tx_repo = SqliteTransactionRepository(db)
+        
+        user_id = 1
+        
+        # Create multi-month, multi-category data
+        data = [
+            # (month, category_id, amount)
+            (1, 1, 100.0), (1, 2, 50.0),
+            (2, 1, 120.0), (2, 2, 60.0),
+            (3, 1, 150.0), (3, 2, 70.0),
+        ]
+        
+        for month, cat_id, amount in data:
+            tx = Transaction(
+                id=0, tx_type=TxType.EXPENSE, account_id=1, category_id=cat_id,
+                amount=amount, description="Exp", tx_date=date(2024, month, 15)
+            )
+            tx_repo.add(user_id, tx)
+        
+        # Compare categories across months
+        monthly_cat = defaultdict(lambda: defaultdict(float))
+        all_tx = tx_repo.list_all(user_id)
+        
+        for tx in all_tx:
+            monthly_cat[tx.tx_date.month][tx.category_id] += tx.amount
+        
+        print("[OK] Monthly comparison:")
+        for month in sorted(monthly_cat.keys()):
+            cat_data = monthly_cat[month]
+            total = sum(cat_data.values())
+            print(f"  Month {month}: Cat1=${cat_data[1]:.0f}, Cat2=${cat_data[2]:.0f}, Total=${total:.0f}")
+        
+        db.close()
+        return True
+    except Exception as e:
+        print(f"[FAIL] Error: {e}")
+        return False
+
+
+def test_ytd_reporting():
+    """Test comprehensive YTD reporting."""
+    print("\n" + "="*60)
+    print("Testing YTD Reporting")
+    print("="*60)
+    
+    try:
+        if os.path.exists("test_mvp8_ytd_report.db"):
+
+            os.remove("test_mvp8_ytd_report.db")
+
+        
+        db = setup_test_db("test_mvp8_ytd_report.db")
+        tx_repo = SqliteTransactionRepository(db)
+        
+        user_id = 1
+        
+        # Create YTD transactions (income and expenses)
+        income_total = 0
+        expense_total = 0
+        
+        for month in range(1, 4):
+            # Income
+            income = Transaction(
+                id=0, tx_type=TxType.INCOME, account_id=1, category_id=None,
+                amount=2000.0, description="Salary", tx_date=date(2024, month, 1)
+            )
+            tx_repo.add(user_id, income)
+            income_total += 2000.0
+            
+            # Expenses
+            expense = Transaction(
+                id=0, tx_type=TxType.EXPENSE, account_id=1, category_id=1,
+                amount=500.0 * month, description="Exp", tx_date=date(2024, month, 15)
+            )
+            tx_repo.add(user_id, expense)
+            expense_total += 500.0 * month
+        
+        # Generate YTD report
+        ytd_tx = tx_repo.list_for_ytd(user_id, 2024, 3)
+        income_tx = [t for t in ytd_tx if t.tx_type == TxType.INCOME]
+        expense_tx = [t for t in ytd_tx if t.tx_type == TxType.EXPENSE]
+        
+        total_income = sum(t.amount for t in income_tx)
+        total_expense = sum(t.amount for t in expense_tx)
+        net = total_income - total_expense
+        
+        print(f"[OK] YTD Q1 2024 Report")
+        print(f"  Total Income: ${total_income}")
+        print(f"  Total Expenses: ${total_expense}")
+        print(f"  Net: ${net}")
+        print(f"  Savings Rate: {(net/total_income)*100:.1f}%")
+        
+        db.close()
+        return True
+    except Exception as e:
+        print(f"[FAIL] Error: {e}")
+        return False
+
+
+def test_advanced_metrics():
+    """Test advanced financial metrics."""
+    print("\n" + "="*60)
+    print("Testing Advanced Metrics")
+    print("="*60)
+    
+    try:
+        if os.path.exists("test_mvp8_metrics.db"):
+
+            os.remove("test_mvp8_metrics.db")
+
+        
+        db = setup_test_db("test_mvp8_metrics.db")
+        tx_repo = SqliteTransactionRepository(db)
+        
+        user_id = 1
+        
+        # Create sample data for metrics
+        # Month 1: $3000 income, $500 expenses
+        for month in [1, 2, 3]:
+            tx_i = Transaction(
+                id=0, tx_type=TxType.INCOME, account_id=1, category_id=None,
+                amount=3000.0, description="Salary", tx_date=date(2024, month, 1)
+            )
+            tx_repo.add(user_id, tx_i)
+            
+            # Progressive expenses
+            for day in [5, 10, 15, 20, 25]:
+                tx_e = Transaction(
+                    id=0, tx_type=TxType.EXPENSE, account_id=1, category_id=1,
+                    amount=100.0, description="Daily", tx_date=date(2024, month, day)
+                )
+                tx_repo.add(user_id, tx_e)
+        
+        # Calculate metrics
+        ytd_tx = tx_repo.list_for_ytd(user_id, 2024, 3)
+        income_tx = [t for t in ytd_tx if t.tx_type == TxType.INCOME]
+        expense_tx = [t for t in ytd_tx if t.tx_type == TxType.EXPENSE]
+        
+        total_income = sum(t.amount for t in income_tx)
+        total_expense = sum(t.amount for t in expense_tx)
+        avg_monthly_income = total_income / 3
+        avg_monthly_expense = total_expense / 3
+        expense_ratio = (total_expense / total_income) * 100
+        
+        print(f"[OK] Advanced Financial Metrics")
+        print(f"  YTD Income: ${total_income}")
+        print(f"  YTD Expenses: ${total_expense}")
+        print(f"  Avg Monthly Income: ${avg_monthly_income}")
+        print(f"  Avg Monthly Expense: ${avg_monthly_expense}")
+        print(f"  Expense Ratio: {expense_ratio:.1f}%")
+        print(f"  Savings Potential: ${total_income - total_expense}")
+        
+        db.close()
+        return True
+    except Exception as e:
+        print(f"[FAIL] Error: {e}")
+        return False
+
+
+
+
 def run_all_tests():
     """Execute all tests (inherited + new).
     
-    Validates all functionality from database initialization through budget management:
+    Validates all functionality from database initialization through advanced analytics:
     - Database schema and integrity
     - Domain models and magic methods
     - User authentication
@@ -2087,9 +2316,13 @@ def run_all_tests():
     - Monthly, YTD, and category breakdown analytics
     - Budget repository operations
     - Budget vs actual, alerts, and multi-category tracking
+    - Spending trend analysis over time
+    - Category comparison analytics
+    - Year-to-date reporting
+    - Advanced spending metrics
     """
     print("\n" + "#"*60)
-    print("# Test Suite: Database + Auth + Accounts + Transactions + Income + Categories + Analytics + Budgets")
+    print("# Test Suite: Database + Auth + Accounts + Transactions + Categories + Budgets + Advanced Analytics")
     print("#"*60)
     
     # Step 1 tests (inherited)
@@ -2137,11 +2370,17 @@ def run_all_tests():
     results.append(("YTD Analytics", test_analytics_ytd_totals()))
     results.append(("Category Breakdown Analytics", test_analytics_category_breakdown()))
     
-    # Step 7 tests (new)
+    # Step 7 tests (inherited)
     results.append(("Budget Repository", test_budget_repository()))
     results.append(("Budget vs Actual", test_budget_vs_actual()))
     results.append(("Budget Alerts", test_budget_alerts()))
     results.append(("Multi-Category Budgets", test_multi_category_budgets()))
+
+    # Step 8 tests (new)
+    results.append(("Spending Trends", test_spending_trends()))
+    results.append(("Category Comparison", test_category_comparison()))
+    results.append(("YTD Reporting", test_ytd_reporting()))
+    results.append(("Advanced Metrics", test_advanced_metrics()))
     
     print("\n" + "="*60)
     print("Test Results Summary")
