@@ -9,12 +9,10 @@ from __future__ import annotations
 from datetime import datetime
 from nicegui import ui
 
-from ...domain.services import BudgetService
-from ...domain.auth_service import AuthService
-
-
-def _money(v: float) -> str:
-    return f"CHF {v:,.2f}"
+from ...services.budget_service import BudgetService
+from ...services.auth_service import AuthService
+from .controllers import BudgetController
+from .utils import money as _money
 
 
 def budget_page(service: BudgetService, auth_service: AuthService) -> None:
@@ -23,15 +21,24 @@ def budget_page(service: BudgetService, auth_service: AuthService) -> None:
         ui.label("Please log in to manage budgets").classes("text-center mt-4")
         return
     user_id = current_user.id
-    
+    budget_ctrl = BudgetController(service)
+
     now = datetime.now()
     months = service.list_months_available(user_id)
     # Always default to current month, whether it has data or not
     default_year, default_month = (now.year, now.month)
-    
-    # Ensure current month is in the options
-    current_month_tuple = (default_year, default_month)
-    all_months = sorted(set(months + [current_month_tuple]), reverse=True) if months else [current_month_tuple]
+
+    # Build future months: current month + next 11 months
+    def _add_months(y: int, m: int, n: int) -> tuple[int, int]:
+        m += n
+        y += (m - 1) // 12
+        m = (m - 1) % 12 + 1
+        return y, m
+
+    future_months = [_add_months(default_year, default_month, i) for i in range(12)]
+
+    # Merge past months with data + future months, sort descending
+    all_months = sorted(set(months) | set(future_months), reverse=True)
 
     categories = service.list_categories(user_id)
     cat_options = {c.id: c.name for c in categories}
@@ -78,11 +85,53 @@ def budget_page(service: BudgetService, auth_service: AuthService) -> None:
             columns=[
                 {"name": "category", "label": "Category", "field": "category", "sortable": True},
                 {"name": "limit", "label": "Limit", "field": "limit", "sortable": True},
+                {"name": "spent", "label": "Spent", "field": "spent", "sortable": True},
+                {"name": "remaining", "label": "Remaining", "field": "remaining", "sortable": True},
                 {"name": "actions", "label": "Actions", "field": "actions"},
             ],
             rows=[],
             row_key="id",
         ).classes("w-full mt-3").props("dense")
+        budget_empty_label = ui.label(
+            "No budgets set for this month. Use the form above to add one."
+        ).classes("text-center mt-4 text-gray-400 italic")
+        budget_empty_label.set_visibility(False)
+
+        # Budget utilization donut chart
+        ui.label("Budget Utilization").classes("font-semibold mt-8")
+        with ui.element("div").classes("card p-4 mt-3"):
+            budget_chart = ui.echart({
+                "tooltip": {
+                    "trigger": "item",
+                    "formatter": "{b}: {c}",
+                },
+                "legend": {
+                    "orient": "vertical",
+                    "left": "left",
+                    "textStyle": {"color": "#666"},
+                },
+                "series": [{
+                    "name": "Spent",
+                    "type": "pie",
+                    "radius": ["40%", "70%"],
+                    "avoidLabelOverlap": True,
+                    "itemStyle": {
+                        "borderRadius": 8,
+                        "borderColor": "#fff",
+                        "borderWidth": 2,
+                    },
+                    "label": {"show": False},
+                    "emphasis": {
+                        "label": {"show": True, "fontSize": 12, "fontWeight": "bold"},
+                    },
+                    "labelLine": {"show": False},
+                    "data": [],
+                }],
+            }).classes("h-80 w-full")
+        budget_chart_empty = ui.label(
+            "No budgets to display for this month."
+        ).classes("text-center mt-2 text-gray-400 italic")
+        budget_chart_empty.set_visibility(False)
 
         # ---------- Edit dialog (reliable) ----------
         edit_state = {"row": None}
@@ -111,11 +160,15 @@ def budget_page(service: BudgetService, auth_service: AuthService) -> None:
             id_to_name = {c.id: c.name for c in service.list_categories(user_id)}
             rows = []
             for b in budgets:
+                spent = service.get_category_spending(user_id, b.category_id, year, month)
+                remaining = b.limit_amount - spent
                 rows.append(
                     {
                         "id": b.id,
                         "category": id_to_name.get(b.category_id, f"Category {b.category_id}"),
                         "limit": _money(b.limit_amount),
+                        "spent": _money(spent),
+                        "remaining": _money(remaining),
                         "_category_id": b.category_id,
                         "_limit_amount": b.limit_amount,
                         "_year": b.year,
@@ -124,6 +177,23 @@ def budget_page(service: BudgetService, auth_service: AuthService) -> None:
                 )
             table.rows = rows
             table.update()
+            budget_empty_label.set_visibility(len(rows) == 0)
+
+            # Update budget utilization donut chart
+            chart_data = []
+            for b in budgets:
+                spent = service.get_category_spending(user_id, b.category_id, year, month)
+                pct = (spent / b.limit_amount * 100) if b.limit_amount > 0 else 0
+                cat_name = id_to_name.get(b.category_id, f"Category {b.category_id}")
+                label = f"{cat_name} ({_money(spent)} / {_money(b.limit_amount)}, {pct:.0f}%)"
+                chart_data.append({"name": label, "value": round(spent, 2)})
+
+            has_spending = any(d["value"] > 0 for d in chart_data)
+            budget_chart.set_visibility(has_spending)
+            budget_chart_empty.set_visibility(not has_spending)
+            if has_spending:
+                budget_chart.options["series"][0]["data"] = chart_data
+                budget_chart.update()
 
         def save_budget() -> None:
             if cat_select.value is None:
@@ -137,8 +207,8 @@ def budget_page(service: BudgetService, auth_service: AuthService) -> None:
                 ui.notify("Limit must be greater than 0", type="warning")
                 return
 
-            service.add_budget(user_id, int(cat_select.value), year, month, limit)
-            ui.notify("Budget saved")
+            ok, msg = budget_ctrl.save(user_id, int(cat_select.value), year, month, limit)
+            ui.notify(msg)
             refresh()
 
         def open_edit_dialog(row: dict) -> None:
@@ -157,18 +227,14 @@ def budget_page(service: BudgetService, auth_service: AuthService) -> None:
                 ui.notify("Limit must be greater than 0", type="warning")
                 return
 
-            service.update_budget(
-                user_id,
-                int(row["id"]),
-                limit_amount=float(new_limit),
-            )
+            ok, msg = budget_ctrl.update(user_id, int(row["id"]), float(new_limit))
             edit_dialog.close()
-            ui.notify("Budget updated")
+            ui.notify(msg)
             refresh()
 
         def delete_budget(row: dict) -> None:
-            service.delete_budget(user_id, int(row["id"]))
-            ui.notify("Budget deleted")
+            ok, msg = budget_ctrl.delete(user_id, int(row["id"]))
+            ui.notify(msg)
             refresh()
 
         # Action buttons slot

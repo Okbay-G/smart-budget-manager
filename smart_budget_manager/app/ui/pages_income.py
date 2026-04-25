@@ -9,13 +9,11 @@ from __future__ import annotations
 from datetime import date, datetime
 from nicegui import ui
 
-from ...domain.services import BudgetService
+from ...services.budget_service import BudgetService
 from ...domain.models import TxType
-from ...domain.auth_service import AuthService
-
-
-def _money(v: float) -> str:
-    return f"CHF {v:,.2f}"
+from ...services.auth_service import AuthService
+from .controllers import IncomeController
+from .utils import money as _money
 
 
 def income_page(service: BudgetService, auth_service: AuthService) -> None:
@@ -24,7 +22,8 @@ def income_page(service: BudgetService, auth_service: AuthService) -> None:
         ui.label("Please log in to view income").classes("text-center mt-4")
         return
     user_id = current_user.id
-    
+    income_ctrl = IncomeController(service)
+
     def months_options() -> list[str]:
         return [f"{y}-{m:02d}" for y, m in service.list_months_available(user_id)]
 
@@ -63,7 +62,10 @@ def income_page(service: BudgetService, auth_service: AuthService) -> None:
                 if not name:
                     ui.notify("Enter an account name", type="warning")
                     return
-                acc = service.add_account(user_id, name)
+                ok, msg, acc = income_ctrl.add_account(user_id, name)
+                if not ok:
+                    ui.notify(msg, type="warning")
+                    return
                 acc_options[acc.id] = acc.name
                 account_in.options = acc_options
                 account_in.value = acc.id
@@ -71,7 +73,7 @@ def income_page(service: BudgetService, auth_service: AuthService) -> None:
                 edit_account.options = acc_options
                 edit_account.update()
                 new_acc_input.value = ""
-                ui.notify(f'Account "{acc.name}" created')
+                ui.notify(msg)
 
             ui.button("Add Account", on_click=create_account).props("unelevated").classes("mt-2")
 
@@ -115,6 +117,10 @@ def income_page(service: BudgetService, auth_service: AuthService) -> None:
 
         # Total at bottom
         total_label = ui.label("Total Income: CHF 0.00").classes("text-base font-semibold mt-4 text-right")
+        empty_label = ui.label(
+            "No income recorded for this month. Add your first income entry above."
+        ).classes("text-center mt-4 text-gray-400 italic")
+        empty_label.set_visibility(False)
 
         # -------- Edit dialog --------
         edit_state: dict[str, object] = {"row": None}
@@ -189,6 +195,7 @@ def income_page(service: BudgetService, auth_service: AuthService) -> None:
 
             table.rows = rows
             table.update()
+            empty_label.set_visibility(len(rows) == 0)
             total_label.text = f"Total Income: {_money(total)}"
 
         def add_income() -> None:
@@ -211,13 +218,10 @@ def income_page(service: BudgetService, auth_service: AuthService) -> None:
                 ui.notify("Please add a description", type="warning")
                 return
 
-            service.add_income(
-                user_id,
-                account_id=int(account_in.value),
-                amount=float(amt),
-                description=desc,
-                tx_date=d,
+            ok, msg = income_ctrl.add(
+                user_id, int(account_in.value), float(amt), desc, d
             )
+            ui.notify(msg)
 
             refresh_month_options_if_needed()
             month_select.value = f"{d.year}-{d.month:02d}"
@@ -259,13 +263,8 @@ def income_page(service: BudgetService, auth_service: AuthService) -> None:
                 ui.notify("Please add a description", type="warning")
                 return
 
-            service.update_income(
-                user_id,
-                int(row["id"]),
-                account_id=int(edit_account.value),
-                amount=float(amt),
-                description=desc,
-                tx_date=d,
+            ok, msg = income_ctrl.update(
+                user_id, int(row["id"]), int(edit_account.value), float(amt), desc, d
             )
 
             refresh_month_options_if_needed()
@@ -273,12 +272,12 @@ def income_page(service: BudgetService, auth_service: AuthService) -> None:
             month_select.update()
 
             edit_dialog.close()
-            ui.notify("Income updated")
+            ui.notify(msg)
             refresh()
 
         def delete_income(row: dict) -> None:
-            service.delete_income(user_id, int(row["id"]))
-            ui.notify("Income deleted")
+            ok, msg = income_ctrl.delete(user_id, int(row["id"]))
+            ui.notify(msg)
             refresh()
 
         # Action buttons slot

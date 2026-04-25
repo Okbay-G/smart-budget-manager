@@ -7,7 +7,7 @@ data integrity and thread-safety.
 Classes:
     TxType: Transaction type enumeration (INCOME or EXPENSE).
     Category: Expense category model.
-    Account: Storage account model.
+    Account: Storage account model (Bank, Cash, etc.).
     Transaction: Transaction (income or expense) model.
     MonthlyBudget: Monthly spending limit per category model.
 """
@@ -135,7 +135,7 @@ class Transaction:
     id: int
     tx_type: TxType
     account_id: int
-    category_id: Optional[int]
+    category_id: Optional[int]  # income may not need a category
     amount: float
     description: str
     tx_date: date
@@ -177,14 +177,14 @@ class Transaction:
 class MonthlyBudget:
     """Monthly budget limit model.
 
-    Represents a monthly spending cap for a particular expense category.
+    Represents a spending limit for a specific category in a specific month.
 
     Attributes:
         id (int): Unique budget identifier.
-        category_id (int): Category this budget applies to.
-        year (int): Budget year.
-        month (int): Budget month (1-12).
-        limit_amount (float): Monthly spending limit in currency units.
+        category_id (int): ID of category this budget applies to.
+        year (int): Year of budget.
+        month (int): Month of budget (1-12).
+        limit_amount (float): Maximum spending limit for the month.
     """
     id: int
     category_id: int
@@ -196,9 +196,9 @@ class MonthlyBudget:
         """Return budget summary.
         
         Returns:
-            str: Summary (category_id, year, month, limit).
+            str: Summary of budget (month/year and limit).
         """
-        return f"Budget {self.year}-{self.month:02d}: ${self.limit_amount}"
+        return f"Budget {self.month}/{self.year}: ${self.limit_amount}"
 
     def __repr__(self) -> str:
         """Return detailed budget representation.
@@ -210,16 +210,14 @@ class MonthlyBudget:
                 f"year={self.year}, month={self.month}, limit_amount={self.limit_amount})")
 
     def __lt__(self, other: MonthlyBudget) -> bool:
-        """Compare budgets by month/year.
+        """Compare budgets by year and month.
         
         Args:
             other: Another MonthlyBudget object.
             
         Returns:
-            bool: True if this budget is earlier in time.
+            bool: True if this budget is from an earlier month/year.
         """
         if not isinstance(other, MonthlyBudget):
             return NotImplemented
-        if self.year != other.year:
-            return self.year < other.year
-        return self.month < other.month
+        return (self.year, self.month) < (other.year, other.month)

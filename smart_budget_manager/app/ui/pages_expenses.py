@@ -9,13 +9,11 @@ from __future__ import annotations
 from datetime import date, datetime
 from nicegui import ui
 
-from ...domain.services import BudgetService
+from ...services.budget_service import BudgetService
 from ...domain.models import TxType
-from ...domain.auth_service import AuthService
-
-
-def _money(v: float) -> str:
-    return f"CHF {v:,.2f}"
+from ...services.auth_service import AuthService
+from .controllers import ExpenseController
+from .utils import money as _money
 
 
 def expenses_page(service: BudgetService, auth_service: AuthService) -> None:
@@ -24,7 +22,8 @@ def expenses_page(service: BudgetService, auth_service: AuthService) -> None:
         ui.label("Please log in to view expenses").classes("text-center mt-4")
         return
     user_id = current_user.id
-    
+    expense_ctrl = ExpenseController(service)
+
     def months_options() -> list[str]:
         return [f"{y}-{m:02d}" for y, m in service.list_months_available(user_id)]
 
@@ -55,28 +54,6 @@ def expenses_page(service: BudgetService, auth_service: AuthService) -> None:
             ).props("outlined dense").classes("w-full md:w-56")
 
             search = ui.input(label="Search description").props("outlined dense").classes("w-full md:w-96")
-
-        # Add account inline if none exist yet
-        with ui.element("div").classes("card p-4 mt-6"):
-            ui.label("Accounts").classes("font-semibold")
-            new_acc_input = ui.input(label="New account name", placeholder="e.g. Bank, Cash").props("outlined dense").classes("w-full md:w-64 mt-2")
-
-            def create_account() -> None:
-                name = (new_acc_input.value or "").strip()
-                if not name:
-                    ui.notify("Enter an account name", type="warning")
-                    return
-                acc = service.add_account(user_id, name)
-                acc_options[acc.id] = acc.name
-                account_in.options = acc_options
-                account_in.value = acc.id
-                account_in.update()
-                edit_account.options = acc_options
-                edit_account.update()
-                new_acc_input.value = ""
-                ui.notify(f'Account "{acc.name}" created')
-
-            ui.button("Add Account", on_click=create_account).props("unelevated").classes("mt-2")
 
         # Add Expense
         with ui.element("div").classes("card p-4 mt-4"):
@@ -122,6 +99,10 @@ def expenses_page(service: BudgetService, auth_service: AuthService) -> None:
         ).classes("w-full mt-3").props("dense")
 
         total_label = ui.label("Total Expenses: CHF 0.00").classes("text-base font-semibold mt-4 text-right")
+        empty_label = ui.label(
+            "No expenses recorded for this month. Add your first expense above."
+        ).classes("text-center mt-4 text-gray-400 italic")
+        empty_label.set_visibility(False)
 
         # -------- Edit dialog --------
         edit_state: dict[str, object] = {"row": None}
@@ -193,11 +174,13 @@ def expenses_page(service: BudgetService, auth_service: AuthService) -> None:
                         "_amount_raw": t.amount,
                         "_desc": t.description,
                         "_date_iso": t.tx_date.isoformat(),
+                        "_is_past": (t.tx_date.year, t.tx_date.month) < (now.year, now.month),
                     }
                 )
 
             table.rows = rows
             table.update()
+            empty_label.set_visibility(len(rows) == 0)
             total_label.text = f"Total Expenses: {_money(total)}"
 
         def add_expense() -> None:
@@ -220,23 +203,15 @@ def expenses_page(service: BudgetService, auth_service: AuthService) -> None:
                 ui.notify("Please add a description", type="warning")
                 return
 
-            # Validate budget for this category
             category_id = int(category_in.value)
-            can_add, reason = service.can_add_expense(user_id, category_id, amt, d.year, d.month)
-            if not can_add:
-                ui.notify(reason, type="negative")
+            ok, msg = expense_ctrl.add(
+                user_id, int(account_in.value), category_id, float(amt), desc, d
+            )
+            if not ok:
+                ui.notify(msg, type="negative")
                 return
 
-            service.add_expense(
-                user_id,
-                account_id=int(account_in.value),
-                category_id=category_id,
-                amount=float(amt),
-                description=desc,
-                tx_date=d,
-            )
-
-            ui.notify("Expense added")
+            ui.notify(msg)
             desc_in.value = ""
             refresh()
 
@@ -273,44 +248,49 @@ def expenses_page(service: BudgetService, auth_service: AuthService) -> None:
                 ui.notify("Please add a description", type="warning")
                 return
 
-            # Validate budget for this category (check amount difference)
             category_id = int(edit_category.value)
             old_amount = float(row["_amount_raw"])
-            amount_difference = amt - old_amount
-            
-            if amount_difference > 0:  # Only validate if amount increased
-                can_add, reason = service.can_add_expense(user_id, category_id, amount_difference, d.year, d.month)
-                if not can_add:
-                    ui.notify(reason, type="negative")
-                    return
-
-            service.update_expense(
-                user_id,
-                int(row["id"]),
-                account_id=int(edit_account.value),
-                category_id=category_id,
-                amount=float(amt),
-                description=desc,
-                tx_date=d,
+            ok, msg = expense_ctrl.update(
+                user_id, int(row["id"]), int(edit_account.value), category_id,
+                float(amt), desc, d, old_amount,
             )
+            if not ok:
+                ui.notify(msg, type="negative")
+                return
 
             edit_dialog.close()
-            ui.notify("Expense updated")
+            ui.notify(msg)
             refresh()
+
+        def _is_past_month(row: dict) -> bool:
+            now = datetime.now()
+            from datetime import date as _date
+            tx_date = row.get("_date_iso", "")
+            try:
+                d = datetime.strptime(str(tx_date), "%Y-%m-%d")
+                return (d.year, d.month) < (now.year, now.month)
+            except Exception:
+                return False
 
         def delete_expense(row: dict) -> None:
-            service.delete_expense(user_id, int(row["id"]))
-            ui.notify("Expense deleted")
+            if _is_past_month(row):
+                ui.notify("Past expenses cannot be deleted — you may only edit them.", type="warning")
+                return
+            ok, msg = expense_ctrl.delete(user_id, int(row["id"]))
+            ui.notify(msg)
             refresh()
 
-        # Action buttons slot
+        # Action buttons slot — delete is disabled for past-month records
         table.add_slot(
             "body-cell-actions",
             """
             <q-td :props="props">
               <div class="row items-center q-gutter-sm">
                 <q-btn flat dense icon="edit" @click="$parent.$emit('edit_expense', props.row)" />
-                <q-btn flat dense icon="delete" color="negative" @click="$parent.$emit('delete_expense', props.row)" />
+                <q-tooltip v-if="props.row._is_past">Past expenses cannot be deleted — edit them instead.</q-tooltip>
+                <q-btn flat dense icon="delete" color="negative"
+                       :disable="props.row._is_past"
+                       @click="$parent.$emit('delete_expense', props.row)" />
               </div>
             </q-td>
             """,

@@ -10,20 +10,9 @@ from __future__ import annotations
 from datetime import datetime
 from nicegui import ui
 
-from ...domain.services import BudgetService
-from ...domain.auth_service import AuthService
-
-
-def _money(v: float) -> str:
-    """Format float value as currency string.
-
-    Args:
-        v (float): Value to format.
-
-    Returns:
-        str: Formatted currency string (e.g., "$1,234.56").
-    """
-    return f"CHF {v:,.2f}"
+from ...services.budget_service import BudgetService
+from ...services.auth_service import AuthService
+from .utils import money as _money
 
 
 def dashboard_page(service: BudgetService, auth_service: AuthService) -> None:

@@ -7,7 +7,7 @@ new accounts and authenticate before accessing the application.
 from __future__ import annotations
 
 from nicegui import ui
-from ...domain.auth_service import AuthService
+from ...services.auth_service import AuthService
 
 
 def auth_page(auth_service: AuthService) -> None:

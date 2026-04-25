@@ -7,8 +7,9 @@ transactions throughout the application.
 from __future__ import annotations
 
 from nicegui import ui
-from ...domain.services import BudgetService
-from ...domain.auth_service import AuthService
+from ...services.budget_service import BudgetService
+from ...services.auth_service import AuthService
+from .controllers import CategoryController
 
 
 def categories_page(service: BudgetService, auth_service: AuthService) -> None:
@@ -24,7 +25,8 @@ def categories_page(service: BudgetService, auth_service: AuthService) -> None:
         ui.label("Please log in to manage categories").classes("text-center mt-4")
         return
     user_id = current_user.id
-    
+    cat_ctrl = CategoryController(service)
+
     with ui.element('div').classes('page-wrap'):
         ui.label('Categories').classes('section-title')
         ui.label('Add, rename, and delete categories.').classes('muted mt-2')
@@ -41,6 +43,10 @@ def categories_page(service: BudgetService, auth_service: AuthService) -> None:
             rows=[],
             row_key='id',
         ).classes('w-full mt-6').props('dense')
+        categories_empty_label = ui.label(
+            "No categories yet. Add your first category above."
+        ).classes('text-center mt-4 text-gray-400 italic')
+        categories_empty_label.set_visibility(False)
 
         def refresh() -> None:
             """Refresh the categories table."""
@@ -49,6 +55,7 @@ def categories_page(service: BudgetService, auth_service: AuthService) -> None:
                 rows.append({"id": c.id, "name": c.name, "actions": ""})
             table.rows = rows
             table.update()
+            categories_empty_label.set_visibility(len(rows) == 0)
 
         def add_category_handler() -> None:
             """Handle adding a new category."""
@@ -56,10 +63,10 @@ def categories_page(service: BudgetService, auth_service: AuthService) -> None:
             if not n:
                 ui.notify('Please enter a name', type='warning')
                 return
-            service.add_category(user_id, n)
+            ok, msg = cat_ctrl.add(user_id, n)
             name_in.value = ''
             refresh()
-            ui.notify('Category added')
+            ui.notify(msg)
 
         def rename_handler(row: dict) -> None:
             """Handle renaming a category."""
@@ -84,10 +91,10 @@ def categories_page(service: BudgetService, auth_service: AuthService) -> None:
                 if new_name == category_name:
                     rename_dialog.close()
                     return
-                service.rename_category(user_id, category_id, new_name)
+                ok, msg = cat_ctrl.rename(user_id, category_id, new_name)
                 rename_dialog.close()
                 refresh()
-                ui.notify('Category renamed')
+                ui.notify(msg)
             
             rename_dialog.open()
 
@@ -107,10 +114,10 @@ def categories_page(service: BudgetService, auth_service: AuthService) -> None:
                     ui.button('Delete', on_click=lambda: do_delete()).props('unelevated color=negative')
             
             def do_delete() -> None:
-                service.delete_category(user_id, category_id)
+                ok, msg = cat_ctrl.delete(user_id, category_id)
                 confirm_dialog.close()
                 refresh()
-                ui.notify('Category deleted')
+                ui.notify(msg)
             
             confirm_dialog.open()
 

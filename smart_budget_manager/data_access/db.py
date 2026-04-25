@@ -56,6 +56,7 @@ class Db:
         If called when already connected, reuses existing connection.
         """
         if self._connection is None:
+            # Ensure directory exists
             Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
             self._connection = sqlite3.connect(self.db_path)
             self._connection.execute("PRAGMA foreign_keys = ON")
@@ -70,7 +71,7 @@ class Db:
             RuntimeError: If database is not initialized.
         """
         if self._connection is None:
-            raise RuntimeError("Database not initialized")
+            raise RuntimeError("Database not initialized. Call initialize() first.")
         return self._connection
 
     def close(self) -> None:
@@ -91,13 +92,80 @@ class Db:
         """
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute("""CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL UNIQUE, username TEXT, password_hash TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
-        cursor.execute("""CREATE TABLE IF NOT EXISTS accounts (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, name TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, UNIQUE(user_id, name))""")
-        cursor.execute("""CREATE TABLE IF NOT EXISTS categories (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, name TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, UNIQUE(user_id, name))""")
-        cursor.execute("""CREATE TABLE IF NOT EXISTS transactions (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, tx_type TEXT NOT NULL CHECK(tx_type IN ('income', 'expense')), account_id INTEGER NOT NULL, category_id INTEGER, amount REAL NOT NULL CHECK(amount > 0), description TEXT NOT NULL, tx_date DATE NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE RESTRICT, FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL)""")
-        cursor.execute("""CREATE TABLE IF NOT EXISTS monthly_budgets (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, category_id INTEGER NOT NULL, year INTEGER NOT NULL, month INTEGER NOT NULL CHECK(month BETWEEN 1 AND 12), limit_amount REAL NOT NULL CHECK(limit_amount > 0), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE, UNIQUE(user_id, category_id, year, month))""")
+
+        # Create users table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL UNIQUE,
+                username TEXT,
+                password_hash TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Create accounts table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS accounts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                UNIQUE(user_id, name)
+            )
+        """)
+
+        # Create categories table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS categories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                UNIQUE(user_id, name)
+            )
+        """)
+
+        # Create transactions table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                tx_type TEXT NOT NULL CHECK(tx_type IN ('income', 'expense')),
+                account_id INTEGER NOT NULL,
+                category_id INTEGER,
+                amount REAL NOT NULL CHECK(amount > 0),
+                description TEXT NOT NULL,
+                tx_date DATE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE RESTRICT,
+                FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+            )
+        """)
+
+        # Create monthly_budgets table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS monthly_budgets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                category_id INTEGER NOT NULL,
+                year INTEGER NOT NULL,
+                month INTEGER NOT NULL CHECK(month BETWEEN 1 AND 12),
+                limit_amount REAL NOT NULL CHECK(limit_amount > 0),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
+                UNIQUE(user_id, category_id, year, month)
+            )
+        """)
+
+        # Create indices for common queries
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(tx_date)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_transactions_account ON transactions(account_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_budgets_month ON monthly_budgets(year, month)")
+
         conn.commit()

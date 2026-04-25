@@ -35,7 +35,6 @@ class TransactionEntity(ABC):
         description (str): Transaction description/notes.
         tx_date (date): Date when transaction occurred.
     """
-    
     id: int
     account_id: int
     amount: float
@@ -46,7 +45,7 @@ class TransactionEntity(ABC):
     @abstractmethod
     def tx_type(self) -> TxType:
         """Get transaction type (INCOME or EXPENSE).
-        
+
         Returns:
             TxType: Type of transaction.
         """
@@ -55,7 +54,7 @@ class TransactionEntity(ABC):
     @abstractmethod
     def category_id(self) -> int | None:
         """Get category ID (type-specific).
-        
+
         Returns:
             int | None: Category ID for expenses, None for income.
         """
@@ -141,7 +140,6 @@ class ExpenseTransaction(TransactionEntity):
     Attributes:
         _category_id (int): Category ID for this expense (private, use property).
     """
-    
     _category_id: int
 
     @property

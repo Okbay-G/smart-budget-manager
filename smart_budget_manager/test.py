@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Comprehensive Test Suite for Basic UI
+"""Comprehensive Test Suite for Complete Application
 
-This suite validates cumulative functionality from earlier steps plus new basic UI features:
+This suite validates cumulative functionality from earlier steps plus new complete application features:
 - Database schema initialization and integrity (inherited from earlier steps)
 - Domain model classes and magic methods (inherited from earlier steps)
 - User model, email/password/username validation, registration, login, session management (inherited from earlier steps)
@@ -20,11 +20,15 @@ This suite validates cumulative functionality from earlier steps plus new basic 
 - Category comparison analytics (inherited from earlier steps)
 - Year-to-date reporting (inherited from earlier steps)
 - Advanced spending metrics (inherited from earlier steps)
-- NiceGUI imports and dependencies (new in this step)
-- Core services initialization (new in this step)
-- UI page imports and structure (new in this step)
-- Layout module (new in this step)
-- Main entry point (new in this step)
+- NiceGUI imports and dependencies (inherited from earlier steps)
+- Core services initialization (inherited from earlier steps)
+- UI page imports and structure (inherited from earlier steps)
+- Layout module (inherited from earlier steps)
+- Main entry point (inherited from earlier steps)
+- All core modules integration (new in this step)
+- Complete end-to-end workflow (new in this step)
+- Data persistence across sessions (new in this step)
+- Error handling and edge cases (new in this step)
 """
 
 import sys
@@ -34,10 +38,10 @@ from collections import defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from smart_budget_manager.persistence.db import Db
-from smart_budget_manager.persistence.repositories import SqliteAccountRepository, SqliteTransactionRepository, SqliteCategoryRepository, SqliteBudgetRepository
+from smart_budget_manager.data_access.db import Db
+from smart_budget_manager.data_access.repositories import SqliteAccountRepository, SqliteTransactionRepository, SqliteCategoryRepository, SqliteBudgetRepository
 from smart_budget_manager.domain.models import TxType, Account, Category, Transaction, MonthlyBudget
-from smart_budget_manager.domain.auth_service import AuthService, User
+from smart_budget_manager.services.auth_service import AuthService, User
 from smart_budget_manager.domain.validators import (
     validate_email, validate_password, validate_username, 
     sanitize_input, validate_all_inputs
@@ -518,9 +522,7 @@ def test_user_registration():
     try:
         db = Db(db_file)
         db.initialize()
-        auth = AuthService(db.get_connection())
-        
-        # Test successful registration with strong password
+        auth = AuthService(db)
         success, msg = auth.register("alice@example.com", "SecurePass1!", "Alice")
         assert success, f"Registration failed: {msg}"
         assert auth.current_user is not None
@@ -586,9 +588,7 @@ def test_user_registration():
         db.close()
         return True
     except Exception as e:
-        import traceback
-        print(f"[FAIL] Error: {type(e).__name__}: {str(e)}")
-        traceback.print_exc()
+        print(f"[FAIL] Error: {e}")
         return False
 
 
@@ -603,20 +603,18 @@ def test_user_login():
     - Invalid email format rejected during login
     - Session state updated on successful login
     """
-    print("\n" + "="*60)
-    print("Testing User Login")
-    print("="*60)
-    
     # Clean test database
     if os.path.exists("test_mvp2_login.db"):
         os.remove("test_mvp2_login.db")
 
+    print("\n" + "="*60)
+    print("Testing User Login")
+    print("="*60)
+    
     try:
         db = Db("test_mvp2_login.db")
         db.initialize()
-        auth = AuthService(db.get_connection())
-        
-        # Register user first
+        auth = AuthService(db)
         auth.register("bob@example.com", "SecurePass1!", "Bob")
         auth.logout()
         print("[OK] User registered and logged out")
@@ -678,9 +676,7 @@ def test_session_management():
     try:
         db = Db("test_mvp2_session.db")
         db.initialize()
-        auth = AuthService(db.get_connection())
-        
-        # Test not logged in initially
+        auth = AuthService(db)
         assert not auth.is_logged_in()
         assert auth.current_user is None
         print("[OK] Initially not logged in")
@@ -705,9 +701,7 @@ def test_session_management():
         db.close()
         return True
     except Exception as e:
-        import traceback
-        print(f"[FAIL] Error: {type(e).__name__}: {str(e)}")
-        traceback.print_exc()
+        print(f"[FAIL] Error: {e}")
         return False
 
 
@@ -726,9 +720,7 @@ def test_auth_service_methods():
     try:
         db = Db("test_mvp2_methods.db")
         db.initialize()
-        auth = AuthService(db.get_connection())
-        
-        # Test __str__ when not logged in
+        auth = AuthService(db)
         str_repr = str(auth)
         assert "not logged in" in str_repr.lower()
         print(f"[OK] __str__ (not logged in): {str_repr}")
@@ -2320,7 +2312,7 @@ def test_advanced_metrics():
 
 
 # ============================================================
-# Step 9 tests (Basic_UI) - New
+# Step 9 tests (Basic_UI) - Inherited
 # ============================================================
 
 def test_nicegui_imports():
@@ -2348,8 +2340,8 @@ def test_core_services_initialization():
     print("="*60)
     
     try:
-        from smart_budget_manager.persistence.db import Db
-        from smart_budget_manager.domain.auth_service import AuthService
+        from smart_budget_manager.data_access.db import Db
+        from smart_budget_manager.services.auth_service import AuthService
         
         # Initialize database
         if os.path.exists("test_mvp9_ui.db"):
@@ -2361,8 +2353,7 @@ def test_core_services_initialization():
         print(f"[OK] Database initialized")
         
         # Initialize auth service
-        conn = db.get_connection()
-        auth = AuthService(conn)
+        auth = AuthService(db)
         print(f"[OK] AuthService initialized")
         print(f"[OK] Logged in: {auth.is_logged_in()}")
         
@@ -2495,10 +2486,282 @@ def test_main_entry_point():
 
 
 
+# ============================================================
+# Step 10 tests (Complete_Application) - New
+# ============================================================
+
+def test_all_core_modules():
+    """Test that all core modules can be imported."""
+    print("\n" + "="*60)
+    print("Testing All Core Modules")
+    print("="*60)
+    
+    try:
+        # Database
+        from smart_budget_manager.data_access.db import Db
+        print(f"[OK] Database module")
+        
+        # Repositories
+        from smart_budget_manager.data_access.repositories import (
+            SqliteAccountRepository,
+            SqliteCategoryRepository,
+            SqliteTransactionRepository,
+            SqliteBudgetRepository
+        )
+        print(f"[OK] Repository modules")
+        
+        # Domain models
+        from smart_budget_manager.domain.models import Account, Category, Transaction, TxType, MonthlyBudget
+        print(f"[OK] Domain models")
+        
+        # Services
+        from smart_budget_manager.services.auth_service import AuthService, User
+        print(f"[OK] Authentication service")
+        
+        # Transaction entities
+        from smart_budget_manager.domain.transaction_entities import TransactionFactory, ExpenseTransaction, IncomeTransaction
+        print(f"[OK] Transaction factory and entities")
+        
+        # Exceptions
+        from smart_budget_manager.domain.exceptions import AuthenticationError, ValidationError
+        print(f"[OK] Custom exceptions")
+        
+        print(f"[OK] All core modules importable")
+        return True
+    except Exception as e:
+        print(f"[FAIL] Error: {e}")
+        return False
+
+
+def test_complete_workflow():
+    """Test a complete workflow through the application."""
+    print("\n" + "="*60)
+    print("Testing Complete Workflow")
+    print("="*60)
+    
+    try:
+        from smart_budget_manager.data_access.db import Db
+        from smart_budget_manager.data_access.repositories import (
+            SqliteAccountRepository,
+            SqliteCategoryRepository,
+            SqliteTransactionRepository,
+            SqliteBudgetRepository
+        )
+        from smart_budget_manager.services.auth_service import AuthService
+        from smart_budget_manager.domain.models import Transaction, TxType
+        
+        # Step 1: Initialize database
+        if os.path.exists("test_mvp10_complete.db"):
+
+            os.remove("test_mvp10_complete.db")
+
+        
+        db = setup_test_db("test_mvp10_complete.db")
+        print(f"[OK] Step 1: Database initialized")
+        
+        # Step 2: User authentication
+        auth = AuthService(db)
+        success, msg = auth.register("user@example.com", "SecurePass1!", "Test User")
+        if not success:
+            print(f"[WARN] Registration result: success={success}, msg={msg}, is_logged_in={auth.is_logged_in()}")
+        assert success, f"Registration failed: {msg}"
+        assert auth.is_logged_in(), "Not logged in after registration"
+        user_id = auth.current_user.id
+        print(f"[OK] Step 2: User registered and authenticated (ID: {user_id})")
+        
+        # Step 3: Create accounts
+        account_repo = SqliteAccountRepository(db)
+        # Use different account names to avoid conflicts with default accounts created during registration
+        acc1 = account_repo.add(user_id, "Investment")
+        acc2 = account_repo.add(user_id, "Money Market")
+        print(f"[OK] Step 3: Created 2 accounts")
+        
+        # Step 4: Create categories (use custom names to avoid conflicts with defaults)
+        category_repo = SqliteCategoryRepository(db)
+        cat1 = category_repo.add(user_id, "Groceries")
+        cat2 = category_repo.add(user_id, "Fuel")
+        print(f"[OK] Step 4: Created 2 categories")
+        
+        # Step 5: Set budgets
+        budget_repo = SqliteBudgetRepository(db)
+        budget_repo.add(user_id, cat1.id, 2024, 3, 300.0)
+        budget_repo.add(user_id, cat2.id, 2024, 3, 150.0)
+        print(f"[OK] Step 5: Created 2 monthly budgets")
+        
+        # Step 6: Record transactions
+        tx_repo = SqliteTransactionRepository(db)
+        
+        # Income
+        income = Transaction(
+            id=0, tx_type=TxType.INCOME, account_id=acc1.id, category_id=None,
+            amount=2000.0, description="Salary", tx_date=date(2024, 3, 1)
+        )
+        tx_repo.add(user_id, income)
+        
+        # Expenses
+        expense1 = Transaction(
+            id=0, tx_type=TxType.EXPENSE, account_id=acc1.id, category_id=cat1.id,
+            amount=100.0, description="Groceries", tx_date=date(2024, 3, 5)
+        )
+        expense2 = Transaction(
+            id=0, tx_type=TxType.EXPENSE, account_id=acc2.id, category_id=cat2.id,
+            amount=50.0, description="Gas", tx_date=date(2024, 3, 10)
+        )
+        tx_repo.add(user_id, expense1)
+        tx_repo.add(user_id, expense2)
+        print(f"[OK] Step 6: Recorded 1 income and 2 expenses")
+        
+        # Step 7: Generate analytics
+        all_tx = tx_repo.list_all(user_id)
+        month_tx = tx_repo.list_for_month(user_id, 2024, 3)
+        
+        total_income = sum(t.amount for t in all_tx if t.tx_type == TxType.INCOME)
+        total_expense = sum(t.amount for t in all_tx if t.tx_type == TxType.EXPENSE)
+        
+        print(f"[OK] Step 7: Analytics generated")
+        print(f"  Total Income: ${total_income}")
+        print(f"  Total Expenses: ${total_expense}")
+        print(f"  Net: ${total_income - total_expense}")
+        
+        # Step 8: Verify data isolation per user
+        auth.logout()
+        success, msg = auth.register("alice@example.com", "SecurePass2!", "Alice")
+        assert success, f"Alice registration failed: {msg}"
+        user2_id = auth.current_user.id
+        
+        user2_accounts = account_repo.list_all(user2_id)
+        assert len(user2_accounts) == 4, f"Alice should have 4 default accounts, got {len(user2_accounts)}"  # Updated: now we create 4 default accounts
+        print(f"[OK] Step 8: User isolation verified (Alice has {len(user2_accounts)} default accounts)")
+        
+        db.close()
+        print(f"[OK] Complete workflow successful!")
+        return True
+    except Exception as e:
+        print(f"[FAIL] Error in workflow: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_data_persistence():
+    """Test that data persists across sessions."""
+    print("\n" + "="*60)
+    print("Testing Data Persistence")
+    print("="*60)
+    
+    try:
+        from smart_budget_manager.data_access.db import Db
+        from smart_budget_manager.data_access.repositories import SqliteAccountRepository
+        from smart_budget_manager.services.auth_service import AuthService
+        
+        # Session 1: Create data
+        if os.path.exists("test_mvp10_persist.db"):
+
+            os.remove("test_mvp10_persist.db")
+
+        
+        db = setup_test_db("test_mvp10_persist.db")
+        auth = AuthService(db)
+        
+        success, msg = auth.register("persist@example.com", "SecurePass1!", "Persist User")
+        user_id = auth.current_user.id
+        
+        account_repo = SqliteAccountRepository(db)
+        acc = account_repo.add(user_id, "Test Account")
+        created_id = acc.id
+        
+        db.close()
+        print(f"[OK] Session 1: Data created (Account ID: {created_id})")
+        
+        # Session 2: Verify data persists (reopen same database)
+        db = Db("test_mvp10_persist.db")
+        db.initialize()  # Safe to call again - schema already exists
+        auth = AuthService(db)
+        
+        # Login with persisted user
+        success, msg = auth.login("persist@example.com", "SecurePass1!")
+        assert success and auth.is_logged_in(), f"Login failed: {msg}"
+        user_id = auth.current_user.id
+        
+        # Retrieve the account that was created in session 1
+        account_repo = SqliteAccountRepository(db)
+        all_accounts = account_repo.list_all(user_id)
+        
+        # Find our test account (might have multiple due to defaults)
+        test_account = next((acc for acc in all_accounts if acc.name == "Test Account"), None)
+        
+        assert test_account is not None, f"Test account not found. Available: {[acc.name for acc in all_accounts]}"
+        assert test_account.name == "Test Account"
+        print(f"[OK] Session 2: Data retrieved (Account: {test_account.name})")
+        
+        db.close()
+        print(f"[OK] Data persistence verified!")
+        return True
+    except Exception as e:
+        print(f"[FAIL] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_error_handling():
+    """Test error handling throughout the application."""
+    print("\n" + "="*60)
+    print("Testing Error Handling")
+    print("="*60)
+    
+    try:
+        from smart_budget_manager.data_access.db import Db
+        from smart_budget_manager.data_access.repositories import SqliteAccountRepository
+        from smart_budget_manager.services.auth_service import AuthService
+        from smart_budget_manager.domain.exceptions import ValidationError
+        from smart_budget_manager.domain.transaction_entities import TransactionFactory
+        from datetime import date
+        
+        # Test 1: Invalid registration
+        if os.path.exists("test_mvp10_errors.db"):
+
+            os.remove("test_mvp10_errors.db")
+
+        
+        db = setup_test_db("test_mvp10_errors.db")
+        auth = AuthService(db)
+        
+        success, msg = auth.register("invalid", "short", "User")
+        assert not success
+        print(f"[OK] Invalid registration rejected")
+        
+        # Test 2: Invalid login
+        success, msg = auth.login("nonexistent@example.com", "password")
+        assert not success
+        print(f"[OK] Invalid login rejected")
+        
+        # Test 3: Validation error
+        try:
+            TransactionFactory.create_expense(
+                id=1, account_id=1, category_id=0,
+                amount=-100.0, description="",
+                tx_date=date(2024, 3, 15)
+            )
+            print(f"[FAIL] Should have raised ValidationError")
+            return False
+        except ValidationError:
+            print(f"[OK] Invalid transaction rejected")
+        
+        db.close()
+        print(f"[OK] Error handling verified!")
+        return True
+    except Exception as e:
+        print(f"[FAIL] Unexpected error: {e}")
+        return False
+
+
+
+
 def run_all_tests():
     """Execute all tests (inherited + new).
 
-    Validates all functionality from database initialization through basic UI:
+    Validates all functionality from database initialization through the complete application:
     - Database schema and integrity
     - Domain models and magic methods
     - User authentication
@@ -2510,11 +2773,11 @@ def run_all_tests():
     - Budget repository operations
     - Budget vs actual, alerts, and multi-category tracking
     - Spending trends, category comparison, YTD reporting, advanced metrics
-    - NiceGUI imports and core services
-    - UI page imports, layout module, and main entry point
+    - NiceGUI imports, core services, UI pages, layout, and main entry point
+    - All core modules, complete workflow, data persistence, error handling
     """
     print("\n" + "#"*60)
-    print("# Test Suite: Database + Auth + Accounts + Transactions + Categories + Budgets + Advanced Analytics + Basic UI")
+    print("# Test Suite: Database + Auth + Accounts + Transactions + Categories + Budgets + Analytics + UI + Complete App")
     print("#"*60)
     
     # Step 1 tests (inherited)
@@ -2574,12 +2837,18 @@ def run_all_tests():
     results.append(("YTD Reporting", test_ytd_reporting()))
     results.append(("Advanced Metrics", test_advanced_metrics()))
     
-    # Step 9 tests (new)
+    # Step 9 tests (inherited)
     results.append(("NiceGUI Imports", test_nicegui_imports()))
     results.append(("Core Services Init", test_core_services_initialization()))
     results.append(("UI Page Imports", test_ui_page_imports()))
     results.append(("Layout Module", test_layout_module()))
     results.append(("Main Entry Point", test_main_entry_point()))
+    
+    # Step 10 tests (new)
+    results.append(("All Core Modules", test_all_core_modules()))
+    results.append(("Complete Workflow", test_complete_workflow()))
+    results.append(("Data Persistence", test_data_persistence()))
+    results.append(("Error Handling", test_error_handling()))
     
     print("\n" + "="*60)
     print("Test Results Summary")
