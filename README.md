@@ -253,7 +253,7 @@ smart_budget_manager/
       ```
 - Install dependencies:
    ```bash
-   pip install -r requirements.txt
+   python -m pip install -r requirements.txt
    ```
 
 ### 2. Launch

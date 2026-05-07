@@ -14,7 +14,7 @@ try:
     from nicegui import app as nicegui_app
     from nicegui import ui
 except ImportError:
-    print("Error: NiceGUI not installed. Install with: pip install nicegui")
+    print("Error: NiceGUI not installed. Install with: python -m pip install -r requirements.txt")
     sys.exit(1)
 
 from .services.budget_service import BudgetService
