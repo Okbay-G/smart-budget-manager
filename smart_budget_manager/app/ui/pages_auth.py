@@ -183,6 +183,8 @@ def auth_page(auth_service: AuthService) -> None:
                 confirm_password_input = ui.input(
                     placeholder='Confirm Password'
                 ).props('outlined type=password').classes('auth-input').style('width: 100%')
+
+                show_password_checkbox = ui.checkbox('Show password').classes('text-gray-600')
                 
                 # Messages
                 error_label = ui.label('').classes('auth-message error').style('display: none')
@@ -208,6 +210,12 @@ def auth_page(auth_service: AuthService) -> None:
                 username_input.visible = False
                 confirm_password_input.visible = False
                 submit_button.text = 'Login'
+
+        def update_password_visibility():
+            """Show or hide password text in the input fields."""
+            input_type = 'text' if show_password_checkbox.value else 'password'
+            password_input.props(f'outlined type={input_type}')
+            confirm_password_input.props(f'outlined type={input_type}')
         
         def show_error(message: str):
             """Show error message."""
@@ -284,7 +292,9 @@ def auth_page(auth_service: AuthService) -> None:
         
         # Wire submit button
         submit_button.on_click(handle_submit)
+        show_password_checkbox.on('update:model-value', lambda _: update_password_visibility())
         
         # Initial UI setup (login mode by default)
         username_input.visible = False
         confirm_password_input.visible = False
+        update_password_visibility()
