@@ -102,8 +102,8 @@ def auth_page(auth_service: AuthService) -> None:
                 padding: 12px 24px;
                 border: none;
                 border-radius: 8px;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+                color: white !important;
                 font-size: 16px;
                 font-weight: 600;
                 cursor: pointer;
@@ -189,7 +189,7 @@ def auth_page(auth_service: AuthService) -> None:
                 success_label = ui.label('').classes('auth-message success').style('display: none')
                 
                 # Submit button
-                submit_button = ui.button('Login').props('flat').classes('auth-button')
+                submit_button = ui.button('Login').classes('auth-button')
             
             # Footer
             ui.label('Secure & Private').classes('auth-footer')
