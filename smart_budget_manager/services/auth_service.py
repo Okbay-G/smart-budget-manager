@@ -217,6 +217,35 @@ class AuthService:
         """Log out current user by clearing session state."""
         self._current_user = None
 
+    def update_username(self, username: str) -> tuple[bool, str]:
+        """Update the current user's display name."""
+        if not self._current_user:
+            return False, "Not logged in"
+
+        username = sanitize_input(username)
+        username_valid, username_error = validate_username(username)
+        if not username_valid:
+            return False, username_error
+
+        display_name = username or self._current_user.email.split("@")[0]
+
+        try:
+            cursor = self._conn.cursor()
+            cursor.execute(
+                "UPDATE users SET username = ? WHERE id = ?",
+                (display_name, self._current_user.id),
+            )
+            self._conn.commit()
+            self._current_user = User(
+                id=self._current_user.id,
+                email=self._current_user.email,
+                username=display_name,
+            )
+            return True, "Profile name updated"
+        except sqlite3.Error as e:
+            self._conn.rollback()
+            return False, f"Database error: {str(e)}"
+
     def get_current_user(self) -> Optional[User]:
         """Get currently logged-in user.
 

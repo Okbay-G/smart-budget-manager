@@ -76,10 +76,40 @@ def _layout_shell(content_builder, *, active_path: str, auth_service: AuthServic
                 
                 user = auth_service.current_user
                 if user:
-                    # User profile display with icon
+                    display_name = user.username or user.email.split("@")[0]
+
+                    profile_name_label = None
+
+                    def open_profile_dialog() -> None:
+                        profile_dialog.open()
+
+                    def save_profile_name() -> None:
+                        new_name = profile_name_input.value or ""
+                        success, message = auth_service.update_username(new_name)
+                        if success and auth_service.current_user:
+                            updated_user = auth_service.current_user
+                            profile_name_label.text = updated_user.username or updated_user.email.split("@")[0]
+                            profile_dialog.close()
+                            ui.notify(message, type="positive")
+                        else:
+                            ui.notify(message, type="negative")
+
+                    with ui.dialog() as profile_dialog:
+                        with ui.card().classes("w-80 gap-4"):
+                            ui.label("Update profile name").classes("text-lg font-semibold")
+                            profile_name_input = ui.input(
+                                label="Display name",
+                                value=display_name,
+                            ).props("outlined").classes("w-full")
+                            with ui.row().classes("justify-end gap-2"):
+                                ui.button("Cancel", on_click=profile_dialog.close).props("flat")
+                                ui.button("Save", on_click=save_profile_name).props("unelevated")
+
+                    # User profile display with icon and edit action
                     with ui.row().classes("items-center gap-2"):
                         ui.html("👤").classes("text-2xl")
-                        ui.label(user.username).classes("text-lg font-semibold text-white")
+                        profile_name_label = ui.label(display_name).classes("text-lg font-semibold text-white")
+                        ui.button(icon="edit", on_click=open_profile_dialog).props("flat round dense").classes("text-white")
                 ui.button("Logout", on_click=logout_handler).props("unelevated").classes("authbtn")
 
     content_builder()
