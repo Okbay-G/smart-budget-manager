@@ -100,3 +100,11 @@ Desktop.ini
 # Ignore SQLite database files
 *.sqlite3
 *.db
+
+# Temporary investigation and analysis files
+*_AUDIT.md
+*_audit.md
+ERROR_*.md
+test_output.txt
+debug_*.txt
+investigation_*.md
