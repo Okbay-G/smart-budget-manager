@@ -233,7 +233,17 @@ def income_page(service: BudgetService, auth_service: AuthService) -> None:
 
         def open_edit_dialog(row: dict) -> None:
             edit_state["row"] = row
-            edit_account.value = int(row["_account_id"])
+            # Refresh account options to handle deleted items
+            current_accounts = {a.id: a.name for a in service.list_accounts(user_id)}
+            
+            # Include the account from this transaction even if deleted
+            account_id = int(row["_account_id"])
+            if account_id not in current_accounts:
+                current_accounts[account_id] = "(deleted account)"
+            
+            # Update the select widget options and values
+            edit_account.options = current_accounts
+            edit_account.value = account_id
             edit_date.value = str(row["_date_iso"])
             edit_amount.value = float(row["_amount_raw"])
             edit_desc.value = str(row["_desc"])

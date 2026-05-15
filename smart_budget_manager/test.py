@@ -2458,8 +2458,8 @@ def test_main_entry_point():
     print("="*60)
     
     try:
-        # Check if main.py exists
-        main_path = os.path.join(os.path.dirname(__file__), 'main.py')
+        # Check if main.py exists (in project root, not in package directory)
+        main_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'main.py')
         if not os.path.exists(main_path):
             print(f"[FAIL] main.py not found at {main_path}")
             return False
@@ -2630,8 +2630,8 @@ def test_complete_workflow():
         user2_id = auth.current_user.id
         
         user2_accounts = account_repo.list_all(user2_id)
-        assert len(user2_accounts) == 4, f"Alice should have 4 default accounts, got {len(user2_accounts)}"  # Updated: now we create 4 default accounts
-        print(f"[OK] Step 8: User isolation verified (Alice has {len(user2_accounts)} default accounts)")
+        assert len(user2_accounts) == 0, f"Alice should have 0 accounts (defaults removed), got {len(user2_accounts)}"
+        print(f"[OK] Step 8: User isolation verified (Alice has {len(user2_accounts)} accounts)")
         
         db.close()
         print(f"[OK] Complete workflow successful!")

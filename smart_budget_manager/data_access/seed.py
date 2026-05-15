@@ -1,7 +1,7 @@
 """Default data seeding for new users.
 
-Provides seed_new_user() which inserts default accounts and categories
-for a newly registered user so the application is immediately usable.
+Provides seed_new_user() which inserts default categories
+for a newly registered user. Users must create their own accounts.
 This keeps seeding logic in the persistence layer, separate from auth logic.
 """
 
@@ -23,7 +23,7 @@ _DEFAULT_CATEGORIES = [
 
 
 def seed_new_user(conn: sqlite3.Connection, user_id: int) -> None:
-    """Insert default accounts and categories for a newly registered user.
+    """Insert default categories for a newly registered user.
 
     Executes within the caller's transaction — does NOT commit.
 
@@ -32,11 +32,7 @@ def seed_new_user(conn: sqlite3.Connection, user_id: int) -> None:
         user_id: ID of the newly created user.
     """
     cursor = conn.cursor()
-    for name in _DEFAULT_ACCOUNTS:
-        cursor.execute(
-            "INSERT INTO accounts (user_id, name) VALUES (?, ?)",
-            (user_id, name),
-        )
+    # Note: Default accounts removed. Users must create their own accounts.
     for name in _DEFAULT_CATEGORIES:
         cursor.execute(
             "INSERT INTO categories (user_id, name) VALUES (?, ?)",

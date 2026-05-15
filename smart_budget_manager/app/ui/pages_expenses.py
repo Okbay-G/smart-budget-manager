@@ -217,8 +217,23 @@ def expenses_page(service: BudgetService, auth_service: AuthService) -> None:
 
         def open_edit_dialog(row: dict) -> None:
             edit_state["row"] = row
-            edit_account.value = int(row["_account_id"])
-            edit_category.value = int(row["_category_id"])
+            # Refresh account and category options to handle deleted items
+            current_accounts = {a.id: a.name for a in service.list_accounts(user_id)}
+            current_categories = {c.id: c.name for c in service.list_categories(user_id)}
+            
+            # Include the account/category from this transaction even if deleted
+            account_id = int(row["_account_id"])
+            category_id = int(row["_category_id"])
+            if account_id not in current_accounts:
+                current_accounts[account_id] = "(deleted account)"
+            if category_id and category_id not in current_categories:
+                current_categories[category_id] = "(deleted category)"
+            
+            # Update the select widget options and values
+            edit_account.options = current_accounts
+            edit_category.options = current_categories
+            edit_account.value = account_id
+            edit_category.value = category_id
             edit_date.value = str(row["_date_iso"])
             edit_amount.value = float(row["_amount_raw"])
             edit_desc.value = str(row["_desc"])
