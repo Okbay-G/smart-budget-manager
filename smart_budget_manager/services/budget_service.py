@@ -161,13 +161,31 @@ class BudgetService:
             return _replace(existing, limit_amount=limit_amount)
         return self._budgets.add(user_id, category_id, year, month, limit_amount)
 
-    def update_budget(self, user_id: int, budget_id: int, *, limit_amount: float) -> None:
-        """Update existing budget limit for a user."""
+    def update_budget(self, user_id: int, budget_id: int, *, limit_amount: float) -> Tuple[bool, str]:
+        """Update existing budget limit for a user.
+        
+        Returns (False, reason) if new limit is below already-spent amount.
+        """
+        budget = self._budgets.get_by_id(user_id, budget_id)
+        if budget is not None:
+            spent = self.get_category_spending(user_id, budget.category_id, budget.year, budget.month)
+            if limit_amount < spent:
+                return False, f"Cannot set limit below already spent amount (CHF {spent:.2f})"
         self._budgets.update(user_id, budget_id, limit_amount)
+        return True, "Budget updated"
 
-    def delete_budget(self, user_id: int, budget_id: int) -> None:
-        """Delete budget for a user."""
+    def delete_budget(self, user_id: int, budget_id: int) -> Tuple[bool, str]:
+        """Delete budget for a user.
+        
+        Returns (False, reason) if expenses already exist for this budget's category/month.
+        """
+        budget = self._budgets.get_by_id(user_id, budget_id)
+        if budget is not None:
+            spent = self.get_category_spending(user_id, budget.category_id, budget.year, budget.month)
+            if spent > 0:
+                return False, f"Cannot delete budget: CHF {spent:.2f} already spent in this category for this month"
         self._budgets.delete(user_id, budget_id)
+        return True, "Budget deleted"
 
     def get_budget_for_category(self, user_id: int, category_id: int, year: int, month: int) -> Optional[MonthlyBudget]:
         """Get budget for a user for a specific category in a month."""

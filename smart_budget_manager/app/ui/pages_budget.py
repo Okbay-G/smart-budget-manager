@@ -228,12 +228,18 @@ def budget_page(service: BudgetService, auth_service: AuthService) -> None:
                 return
 
             ok, msg = budget_ctrl.update(user_id, int(row["id"]), float(new_limit))
+            if not ok:
+                ui.notify(msg, type="negative")
+                return
             edit_dialog.close()
             ui.notify(msg)
             refresh()
 
         def delete_budget(row: dict) -> None:
             ok, msg = budget_ctrl.delete(user_id, int(row["id"]))
+            if not ok:
+                ui.notify(msg, type="negative")
+                return
             ui.notify(msg)
             refresh()
 

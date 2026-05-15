@@ -170,13 +170,11 @@ class BudgetController:
 
     def update(self, user_id: int, budget_id: int, limit: float) -> Tuple[bool, str]:
         """Update an existing budget limit."""
-        self._svc.update_budget(user_id, budget_id, limit_amount=limit)
-        return True, "Budget updated"
+        return self._svc.update_budget(user_id, budget_id, limit_amount=limit)
 
     def delete(self, user_id: int, budget_id: int) -> Tuple[bool, str]:
         """Delete a monthly budget entry."""
-        self._svc.delete_budget(user_id, budget_id)
-        return True, "Budget deleted"
+        return self._svc.delete_budget(user_id, budget_id)
 
 
 class CategoryController:
