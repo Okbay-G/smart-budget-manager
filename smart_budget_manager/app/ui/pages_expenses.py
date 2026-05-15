@@ -72,7 +72,18 @@ def expenses_page(service: BudgetService, auth_service: AuthService) -> None:
                     label="Category",
                 ).props("outlined dense").classes("w-full md:w-52")
 
-                date_in = ui.input(label="Date", value=datetime.now().isoformat()).props("outlined dense type=date").classes("w-full md:w-44")
+                # Helper to get first day of selected month
+                def get_month_date_str() -> str:
+                    y, m = month_select.value.split("-")
+                    return f"{y}-{m}-01"
+
+                date_in = ui.input(label="Date", value=get_month_date_str()).props("outlined dense type=date").classes("w-full md:w-44")
+                
+                # Update date field when month changes to keep them in sync
+                def update_date_for_month() -> None:
+                    date_in.value = get_month_date_str()
+                
+                month_select.on_value_change(lambda: update_date_for_month())
 
                 amount_in = ui.number(label="Amount", value=100.0, format="%.2f", min=0).props(
                     "outlined dense"

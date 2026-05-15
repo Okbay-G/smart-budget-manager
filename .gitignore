@@ -97,9 +97,10 @@ Desktop.ini
 # Ignore test output
 *.log
 
-# Ignore SQLite database files
+# Ignore SQLite database files (including test databases like test_mvp*.db)
 *.sqlite3
 *.db
+test_*.db
 
 # Temporary investigation and analysis files
 *_AUDIT.md
